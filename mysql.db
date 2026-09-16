@@ -1,0 +1,9 @@
+
+CREATE DATABASE sistema_poloCoin;
+USE sistema_poloCoin;
+
+CREATE TABLE professores(
+	id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(40) NOT NULL,
+    password VARCHAR(12),
+);
