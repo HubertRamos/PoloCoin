@@ -11,6 +11,7 @@ const style = {
         justify-content: left;
         margin: 10px;
         border-radius: 15px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
     `,
     button:`
         width: 100%;
@@ -25,23 +26,13 @@ const style = {
     `
 }
 
-window.meuJovem = function(event) {
-    event.preventDefault();
-    
-    const name = document.getElementById("name-input").value;
-    const password = document.getElementById("password-input").value;
-    
-    
-}
-
-export default function Form() {
+export default function Form(type) {
     return `
-        <form style="${style.form}" id="form" onsubmit="meuJovem(event)">
-            <h1 style="${style.h1}">Entrar</h1>
-                
+        <form style="${style.form}" id="meu-form">
+            <h1 style="${style.h1}">${type}</h1>
                 ${Input("Digite seu nome", "text", "name-input", true)}
                 ${Input("Digite sua senha", "password", "password-input", true)}            
-            <button style="${style.button}" type="submit">Entrar</button>
+            <button style="${style.button}" type="submit">${type}</button>
         </form>
     `
 }

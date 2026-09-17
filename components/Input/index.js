@@ -4,7 +4,7 @@ const style = {
         padding: 10px;
         border-radius: 5px;
         border: 1px solid #ccc;
-        margin: auto;
+        margin: 0 auto;
     `
 }
 
