@@ -34,11 +34,52 @@ function Render() {
             const usuario = document.getElementById("usuario-input").value.trim()
             const senha = document.getElementById("senha-input").value.trim()
 
-            // Aqui faremos a chamada para a rota de autenticação do backend em breve
-            console.log({ tipo, usuario, senha })
-            alert(`Tentativa de login como [${tipo}] para o usuário [${usuario}]`)
+            // Chama a função de login real
+            fazerLogin(tipo, usuario, senha)
         })
     }
 }
 
 window.addEventListener("DOMContentLoaded", Render)
+
+async function fazerLogin(tipo, usuario, senha) {
+    try {
+        const res = await fetch('/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nome: usuario, senha, tipo }),
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+            alert(data.error || 'Erro no login')
+            return
+        }
+
+        // Login bem-sucedido — salva os dados na sessão e redireciona
+        sessionStorage.setItem('poloUser', JSON.stringify(data.user))
+
+        // Redireciona de acordo com o tipo de usuário
+        const base = '/app/'
+        if (data.user.tipo === 'adm') {
+            window.location.href = `${base}adm/Produtos/index.html`
+        } else if (data.user.tipo === 'professor') {
+            window.location.href = `${base}professor/Turmas/index.html`
+        } else if (data.user.tipo === 'aluno') {
+            window.location.href = `${base}aluno/index.html`
+        } else if (data.user.tipo === 'responsavel') {
+            window.location.href = `${base}responsavel/index.html`
+        } else {
+            alert(`Bem-vindo(a), ${data.user.nome} (${data.user.tipo})`)
+        }
+
+        console.log('Login OK:', data.user)
+
+        // Aqui você redireciona para a dashboard de cada tipo
+        // window.location.href = `/dashboard-${data.user.tipo}.html`
+    } catch (err) {
+        alert('Não foi possível conectar ao servidor.')
+        console.error(err)
+    }
+}

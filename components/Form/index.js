@@ -50,7 +50,7 @@ export default function Form(type, inputs = [], categorias = []) {
     const inputsHtml = inputs.map(item => {
         return `
             <label style="${style.label}" for="${item.id}">${item.label}</label>
-            ${Input(item.placeholder, item.type, item.id, item.required)}
+            ${Input(item.placeholder, item.type, item.id, item.required, item.options || [])}
         `;
     }).join('');
 
