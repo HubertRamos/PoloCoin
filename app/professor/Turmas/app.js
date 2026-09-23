@@ -7,17 +7,30 @@ async function carregarTurmas() {
     const contentDiv = document.getElementById("dashboard-content")
     if (!contentDiv) return
 
-    try {
-        const resposta = await fetch("http://localhost:3333/turmas")
-        const turmas = await resposta.json()
+    // Pega o ID do professor logado
+    const usuario = JSON.parse(sessionStorage.getItem("poloUser") || "{}")
+    const professorId = usuario?.id
 
-        if (turmas.length === 0) {
-            contentDiv.innerHTML = `<p style="color: #64748b;">Nenhuma turma cadastrada ainda.</p>`
+    if (!professorId) {
+        contentDiv.innerHTML = `<p style="color: #ef4444;">Não autenticado. Faça login novamente.</p>`
+        return
+    }
+
+    try {
+        // Usa o endpoint que retorna apenas as turmas vinculadas ao professor
+        const resposta = await fetch(`http://localhost:3333/professor/turmas?id=${professorId}&_=${Date.now()}`)
+        const dados = await resposta.json()
+
+        const turmasVinculadas = dados.vinculadas || []
+        const todasTurmas = dados.disponiveis || []
+
+        if (turmasVinculadas.length === 0) {
+            contentDiv.innerHTML = `<p style="color: #64748b;">Nenhuma turma vinculada a você.</p>`
             return
         }
 
-        contentDiv.innerHTML = turmas.map(turma => `
-            <div class="card-turma" data-id="${turma.id}" style="background-color: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; margin-bottom: 10px;">
+        contentDiv.innerHTML = turmasVinculadas.map(turma => `
+            <div class="card-turma" data-id="${turma.turma_id}" style="background-color: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; margin-bottom: 10px;">
                 <div>
                     <strong>Turma:</strong> ${turma.serie}º ${turma.turma} <br/>
                     <small style="color: #64748b;">Clique para ver alunos</small>

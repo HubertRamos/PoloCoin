@@ -7,12 +7,13 @@ const dbConfig = {
     database: 'sistema_poloCoin'
 };
 
-export async function criarAlunoComResponsavel(turmaId, nomeAluno, senhaAluno, senhaResponsavel) {
+export async function criarAlunoComResponsavel(turmaId, nomeAluno, nomeResponsavel, senhaAluno, senhaResponsavel) {
     const alunoNomeLimpo = nomeAluno ? nomeAluno.trim() : '';
+    const respNomeLimpo = nomeResponsavel ? nomeResponsavel.trim() : '';
     const alunoSenhaLimpa = senhaAluno ? senhaAluno.trim() : '';
     const respSenhaLimpa = senhaResponsavel ? senhaResponsavel.trim() : '';
 
-    if (!turmaId || !alunoNomeLimpo || !alunoSenhaLimpa || !respSenhaLimpa) {
+    if (!turmaId || !alunoNomeLimpo || !respNomeLimpo || !alunoSenhaLimpa || !respSenhaLimpa) {
         throw new Error('CAMPOS_VAZIOS');
     }
 
@@ -31,17 +32,26 @@ export async function criarAlunoComResponsavel(turmaId, nomeAluno, senhaAluno, s
             throw new Error('DUPLICADO');
         }
 
-        // 2. Cria o nome do responsável automaticamente
-        const nomeResponsavelAutomatico = `Responsável de ${alunoNomeLimpo}`;
-
-        // 3. Insere o responsável na tabela responsaveis
-        const [respResult] = await connection.execute(
-            'INSERT INTO responsaveis (nome, password) VALUES (?, ?)',
-            [nomeResponsavelAutomatico, respSenhaLimpa]
+        // 2. Verifica se o responsável já existe (evita duplicação)
+        const [respExistente] = await connection.execute(
+            'SELECT id FROM responsaveis WHERE nome = ?',
+            [respNomeLimpo]
         );
-        const responsavelId = respResult.insertId;
 
-        // 4. Insere o aluno vinculado à turma e ao responsável
+        let responsavelId;
+        if (respExistente.length > 0) {
+            // Reutiliza o ID do responsável existente
+            responsavelId = respExistente[0].id;
+        } else {
+            // Cria novo responsável
+            const [respResult] = await connection.execute(
+                'INSERT INTO responsaveis (nome, password) VALUES (?, ?)',
+                [respNomeLimpo, respSenhaLimpa]
+            );
+            responsavelId = respResult.insertId;
+        }
+
+        // 3. Insere o aluno vinculado à turma e ao responsável
         await connection.execute(
             'INSERT INTO alunos (turma_id, responsavel_id, nome, password) VALUES (?, ?, ?, ?)',
             [turmaId, responsavelId, alunoNomeLimpo, alunoSenhaLimpa]
@@ -73,8 +83,79 @@ export async function puxarAlunosPorTurma(turmaId) {
             WHERE a.turma_id = ? 
             ORDER BY a.nome
         `, [turmaId]);
-        
+
         return rows;
+    } finally {
+        await connection.end();
+    }
+}
+
+/**
+ * Busca avaliações (ocorrências) de um aluno específico.
+ */
+export async function puxarAvaliacoesDoAluno(alunoId) {
+    if (!alunoId) {
+        throw new Error('CAMPOS_VAZIOS');
+    }
+
+    const connection = await mysql.createConnection(dbConfig);
+    try {
+        const [rows] = await connection.execute(`
+            SELECT
+                av.id AS avaliacao_id,
+                av.categoria,
+                av.valor,
+                av.pontos,
+                av.observacao,
+                DATE(av.criado_em) AS data,
+                TIME(av.criado_em) AS hora,
+                t.serie,
+                t.turma,
+                al.nome AS aluno_nome
+            FROM avaliacoes av
+            JOIN alunos al ON av.aluno_id = al.id
+            JOIN turmas t ON al.turma_id = t.id
+            WHERE av.aluno_id = ?
+            ORDER BY av.criado_em DESC
+        `, [alunoId]);
+
+        return rows;
+    } finally {
+        await connection.end();
+    }
+}
+
+/**
+ * Atualiza a senha de um aluno.
+ */
+export async function atualizarSenhaAluno(alunoId, senhaAtual, novaSenha) {
+    if (!alunoId || !novaSenha) {
+        throw new Error('CAMPOS_VAZIOS');
+    }
+
+    const connection = await mysql.createConnection(dbConfig);
+    try {
+        // Verifica senha atual se fornecida
+        if (senhaAtual) {
+            const [aluno] = await connection.execute(
+                'SELECT password FROM alunos WHERE id = ?',
+                [alunoId]
+            );
+            if (aluno.length === 0) {
+                throw new Error('ALUNO_NAO_ENCONTRADO');
+            }
+            if (aluno[0].password !== senhaAtual) {
+                throw new Error('SENHA_ATUAL_INVALIDA');
+            }
+        }
+
+        // Atualiza a senha
+        await connection.execute(
+            'UPDATE alunos SET password = ? WHERE id = ?',
+            [novaSenha.trim(), alunoId]
+        );
+
+        return { success: true };
     } finally {
         await connection.end();
     }

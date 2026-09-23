@@ -9,48 +9,24 @@ const turmaId = params.get("turmaId")
 const sessionUser = JSON.parse(sessionStorage.getItem("poloUser") || "{}")
 const professorId = sessionUser.id || null
 
-const categoriasAvaliacao = [
-    {
-        nome: "Comportamento",
-        opcoes: [
-            { valor: "produtivo",     label: "Produtivo",    cor: "#10B981", pontos: 25 },
-            { valor: "bagunça",       label: "Bagunça",      cor: "#EF4444", pontos: 5  },
-            { valor: "calmo",         label: "Calm",         cor: "#3B82F6", pontos: 20 },
-            { valor: "agitado",       label: "Agitado",      cor: "#F59E0B", pontos: 10 },
-            { valor: "participativo", label: "Participativo",cor: "#8B5CF6", pontos: 25 },
-            { valor: "desmotivado",   label: "Desmotivado",  cor: "#6B7280", pontos: 5  },
-        ],
-    },
-    {
-        nome: "Comprometimento",
-        opcoes: [
-            { valor: "comprometido",   label: "Comprometido", cor: "#10B981", pontos: 25 },
-            { valor: "desinteressado", label: "Desinteressado",cor: "#EF4444", pontos: 5  },
-            { valor: "proativo",       label: "Proativo",    cor: "#3B82F6", pontos: 25 },
-            { valor: "indiferente",    label: "Indiferente", cor: "#F59E0B", pontos: 10 },
-        ],
-    },
-    {
-        nome: "Social",
-        opcoes: [
-            { valor: "colaborador",    label: "Colaborador",  cor: "#10B981", pontos: 25 },
-            { valor: "isolado",        label: "Isolado",      cor: "#6B7280", pontos: 10 },
-            { valor: "líder",          label: "Líder",        cor: "#8B5CF6", pontos: 25 },
-            { valor: "conflituante",   label: "Conflituante",cor: "#EF4444", pontos: 5  },
-        ],
-    },
-    {
-        nome: "Entrega",
-        opcoes: [
-            { valor: "no prazo",       label: "No prazo",     cor: "#10B981", pontos: 25 },
-            { valor: "atrasado",       label: "Atrasado",     cor: "#F59E0B", pontos: 10 },
-            { valor: "não entregou",   label: "Não entregou", cor: "#EF4444", pontos: 0  },
-            { valor: "antecipou",      label: "Antecipou",    cor: "#3B82F6", pontos: 30 },
-        ],
-    },
-]
+let categoriasAvaliacao = []
+
+// Carrega as categorias de avaliação do arquivo externo
+async function carregarCategoriasAvaliacao() {
+    try {
+        const resposta = await fetch("/const/categoriasAvaliacao.json")
+        const dados = await resposta.json()
+        categoriasAvaliacao = dados.categorias || []
+    } catch (erro) {
+        console.error("Erro ao carregar categorias de avaliação:", erro)
+        categoriasAvaliacao = []
+    }
+}
 
 let isModalOpen = false
+
+// Inicializa as categorias de avaliação
+carregarCategoriasAvaliacao().then(() => console.log("[DEBUG] Categorias carregadas:", categoriasAvaliacao.length))
 
 async function carregarAlunos() {
     const contentDiv = document.getElementById("dashboard-content")
@@ -101,7 +77,7 @@ async function abrirModalAluno(alunoId) {
         const aluno = alunos.find(a => a.id == alunoId)
         if (!aluno) { isModalOpen = false; return }
 
-        const avaliacoes = await fetch(`http://localhost:3333/avaliacoes/${alunoId}`).then(r => r.json())
+        const avaliacoes = await fetch(`http://localhost:3333/avaliacoes/${alunoId}?professorId=${professorId}`).then(r => r.json())
 
         const modalHtml = `
             <div id="modal-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 2000;">

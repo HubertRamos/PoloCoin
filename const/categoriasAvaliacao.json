@@ -1,0 +1,42 @@
+{
+  "categorias": [
+    {
+      "nome": "Comportamento",
+      "opcoes": [
+        { "valor": "produtivo", "label": "Produtivo", "cor": "#10B981", "pontos": 25 },
+        { "valor": "bagunça", "label": "Bagunça", "cor": "#EF4444", "pontos": 5 },
+        { "valor": "calmo", "label": "Calmo", "cor": "#3B82F6", "pontos": 20 },
+        { "valor": "agitado", "label": "Agitado", "cor": "#F59E0B", "pontos": 10 },
+        { "valor": "participativo", "label": "Participativo", "cor": "#8B5CF6", "pontos": 25 },
+        { "valor": "desmotivado", "label": "Desmotivado", "cor": "#6B7280", "pontos": 5 }
+      ]
+    },
+    {
+      "nome": "Comprometimento",
+      "opcoes": [
+        { "valor": "comprometido", "label": "Comprometido", "cor": "#10B981", "pontos": 25 },
+        { "valor": "desinteressado", "label": "Desinteressado", "cor": "#EF4444", "pontos": 5 },
+        { "valor": "proativo", "label": "Proativo", "cor": "#3B82F6", "pontos": 25 },
+        { "valor": "indiferente", "label": "Indiferente", "cor": "#F59E0B", "pontos": 10 }
+      ]
+    },
+    {
+      "nome": "Social",
+      "opcoes": [
+        { "valor": "colaborador", "label": "Colaborador", "cor": "#10B981", "pontos": 25 },
+        { "valor": "isolado", "label": "Isolado", "cor": "#6B7280", "pontos": 10 },
+        { "valor": "lider", "label": "Líder", "cor": "#8B5CF6", "pontos": 25 },
+        { "valor": "conflituante", "label": "Conflituante", "cor": "#EF4444", "pontos": 5 }
+      ]
+    },
+    {
+      "nome": "Entrega",
+      "opcoes": [
+        { "valor": "no_prazo", "label": "No prazo", "cor": "#10B981", "pontos": 25 },
+        { "valor": "atrasado", "label": "Atrasado", "cor": "#F59E0B", "pontos": 10 },
+        { "valor": "nao_entregou", "label": "Não entregou", "cor": "#EF4444", "pontos": 0 },
+        { "valor": "antecipou", "label": "Antecipou", "cor": "#3B82F6", "pontos": 30 }
+      ]
+    }
+  ]
+}

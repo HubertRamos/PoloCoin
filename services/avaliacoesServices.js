@@ -7,13 +7,11 @@ const dbConfig = {
     database: 'sistema_poloCoin'
 };
 
+import { creditarPontos } from './pontosServices.js';
+
 /**
  * Cria uma nova avaliação para um aluno.
- * @param {number} alunoId
- * @param {number} professorId — id do professor logado
- * @param {string} categoria — ex: "comportamento", "comprometimento", "social", "entrega", "observacao"
- * @param {string} valor — ex: "produtivo", "bagunça", "atrasado", ou texto livre
- * @param {string} [observacao] — texto adicional (usado principalmente na categoria observacao)
+ * Se os pontos forem positivos, credita automaticamente na conta do aluno.
  */
 export async function criarAvaliacao(alunoId, professorId, categoria, valor, pontos = 0, observacao = '') {
     if (!alunoId || !professorId || !categoria || !valor) {
@@ -35,6 +33,12 @@ export async function criarAvaliacao(alunoId, professorId, categoria, valor, pon
              VALUES (?, ?, ?, ?, ?, ?)`,
             [alunoIdNum, professorIdNum, categoria, valor, pontosNum, observacao || null]
         );
+
+        // Se pontos positivos, credita automaticamente na conta do aluno
+        if (pontosNum > 0) {
+            await creditarPontos(alunoIdNum, pontosNum);
+        }
+
         return { id: result.insertId, aluno_id: alunoIdNum, professor_id: professorIdNum, categoria, valor, pontos: pontosNum, observacao: observacao || null };
     } finally {
         await connection.end();
@@ -44,20 +48,28 @@ export async function criarAvaliacao(alunoId, professorId, categoria, valor, pon
 /**
  * Puxa todas as avaliações de um aluno, ordenadas por data (mais recente primeiro).
  */
-export async function puxarAvaliacoesPorAluno(alunoId) {
+export async function puxarAvaliacoesPorAluno(alunoId, professorId = null) {
     if (!alunoId) {
         throw new Error('CAMPOS_VAZIOS');
     }
 
     const connection = await mysql.createConnection(dbConfig);
     try {
-        const [rows] = await connection.execute(
-            `SELECT id, categoria, valor, pontos, observacao, DATE(criado_em) AS data, TIME(criado_em) AS hora
-             FROM avaliacoes
-             WHERE aluno_id = ?
-             ORDER BY criado_em DESC`,
-            [Number(alunoId)]
-        );
+        let query = `
+            SELECT id, professor_id, categoria, valor, pontos, observacao, DATE(criado_em) AS data, TIME(criado_em) AS hora
+            FROM avaliacoes
+            WHERE aluno_id = ?
+        `;
+        const params = [Number(alunoId)];
+
+        if (professorId) {
+            query += ` AND professor_id = ?`;
+            params.push(Number(professorId));
+        }
+
+        query += ` ORDER BY criado_em DESC`;
+
+        const [rows] = await connection.execute(query, params);
         return rows;
     } finally {
         await connection.end();

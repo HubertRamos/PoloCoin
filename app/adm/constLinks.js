@@ -7,5 +7,8 @@ export const linksHeader = {
     ],
     'Cadastro Professor': [
         '/app/adm/Professores/index.html'
+    ],
+    'Sair': [
+        '/app/index.html'
     ]
 }

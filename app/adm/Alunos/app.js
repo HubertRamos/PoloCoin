@@ -14,6 +14,7 @@ let mostrarPainel = false
 const inputsAluno = [
     { label: "Nome do Aluno", placeholder: "Nome completo do aluno", type: "text", id: "nome-aluno-input", required: true },
     { label: "Senha do Aluno", placeholder: "Senha de acesso do aluno", type: "password", id: "senha-aluno-input", required: true },
+    { label: "Nome do Responsável", placeholder: "Nome completo do responsável", type: "text", id: "nome-responsavel-input", required: true },
     { label: "Senha do Responsável", placeholder: "Senha de acesso do responsável", type: "password", id: "senha-responsavel-input", required: true },
 ]
 
@@ -103,6 +104,7 @@ function Render(){
             event.preventDefault()
             const nomeAluno = document.getElementById("nome-aluno-input").value.trim()
             const senhaAluno = document.getElementById("senha-aluno-input").value.trim()
+            const nomeResponsavel = document.getElementById("nome-responsavel-input").value.trim()
             const senhaResponsavel = document.getElementById("senha-responsavel-input").value.trim()
 
             try {
@@ -111,6 +113,7 @@ function Render(){
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ 
                         nomeAluno, 
+                        nomeResponsavel,
                         senhaAluno, 
                         senhaResponsavel 
                     })

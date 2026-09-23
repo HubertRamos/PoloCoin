@@ -1,10 +1,39 @@
-window.addEventListener("DOMContentLoaded", () => {
-    const user = JSON.parse(sessionStorage.getItem("poloUser") || "{}")
-    document.getElementById("root").innerHTML = `
-        <div style="padding: 20px; font-size: 18px;">
-            <h2>Área do Aluno</h2>
-            <p style="color: #64748b;">Bem-vindo, ${user.nome || "Aluno"}.</p>
-            <p style="color: #94a3b8;">Em breve: seu painel de aluno.</p>
-        </div>
-    `
-})
+import MenuLateral from '/components/MenuLateral/index.js'
+
+const root = document.getElementById('root');
+const user = JSON.parse(sessionStorage.getItem('poloUser') || '{}');
+
+const menuConfig = {
+    loja: {
+        nome: "Minha Loja",
+        icone: "🛒",
+        acao: "window.navegarPara('loja')"
+    },
+    ocorrencias: {
+        nome: "Ocorrências",
+        icone: "📋",
+        acao: "window.navegarPara('ocorrencias')"
+    },
+    senha: {
+        nome: "Alterar Senha",
+        icone: "🔒",
+        acao: "window.navegarPara('senha')"
+    }
+};
+
+function renderizarMenu() {
+    root.innerHTML = MenuLateral(menuConfig, user);
+    
+    // Navegar para a tela padrão (loja) após a renderização do HTML
+    if (window.navegarPara) {
+        window.navegarPara('loja');
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    if (!user.id) {
+        window.location.href = '/index.html';
+        return;
+    }
+    renderizarMenu();
+});
