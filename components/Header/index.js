@@ -52,27 +52,40 @@ export default function Header(links = {}) {
     }));
 
     return `
-        <header style="${style.header}">
-            <h1 style="${style.h1}">PoloCoin</h1>
-            ${
-                isMobile ? `
-                    <select style="${style.button}" onchange="window.location.href=this.value">
+        <header class="polocoin-header">
+            <div class="polocoin-header__inner">
+                <a href="/index.html" class="polocoin-header__brand">
+                    <div class="polocoin-header__brand-icon">🪙</div>
+                    <span>PoloCoin</span>
+                </a>
+                ${isMobile ? `
+                    <select class="polocoin-header__mobile-menu" onchange="window.location.href=this.value">
                         <option value="" disabled selected>Menu</option>
                         ${itensMenu.map(item => `
                             <option value="${item.url}">${item.nome}</option>
                         `).join('')}
                     </select>
                 ` : `
-                    <nav>
-                        <ul style="${style.lista}">
-                            ${itensMenu.map(item => `
-                                <li><a href="${item.url}" style="${style.link}">${item.nome}</a></li>
-                            `).join('')}
-                        </ul>
+                    <nav class="polocoin-header__nav">
+                        ${itensMenu.map(item => `
+                            <a href="${item.url}" class="polocoin-header__nav-link">${item.nome}</a>
+                        `).join('')}
                     </nav>
-                `
-            }
+                `}
+            </div>
         </header>
+        <div id="sidebar-overlay" class="polocoin-sidebar-overlay" onclick="toggleSidebar()"></div>
     `;
+}
+
+function toggleSidebar() {
+    const sidebar = document.querySelector('.polocoin-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) {
+        sidebar.classList.toggle('polocoin-sidebar--open');
+    }
+    if (overlay) {
+        overlay.classList.toggle('polocoin-sidebar-overlay--visible');
+    }
 }
 

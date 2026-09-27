@@ -47,7 +47,19 @@ PoloCoin/
 └── components/                  # Componentes reutilizáveis
     ├── Header/index.js
     ├── Form/index.js
-    └── Input/index.js
+    ├── Input/index.js
+    ├── MenuLateral/index.js
+    ├── TelaLoja/index.js
+    ├── TelaCarrinho/index.js
+    ├── TelaOcorrencias/index.js
+    ├── TelaSenha/index.js
+    ├── TelaResponsavel/index.js
+    ├── CardProduto/index.js
+    ├── CardOcorrencia/index.js
+    ├── OcorrenciaConsentimento/index.js
+    ├── DashBoard/index.js
+    ├── ButtomReturn/index.js
+    └── UploadFile/index.js
 ```
 
 ---
@@ -323,7 +335,10 @@ PoloCoin/
 - Responsável não é duplicado (reutiliza ID existente)
 - Login com nome/senha
 - Ver saldo de PoloCoins
+- Filtros na loja (busca por texto, filtro por categoria)
+- Carrinho de compras (adicionar múltiplos itens, salvo em sessionStorage, badge no menu)
 - Comprar produtos (se liberado pelo pai e sem ocorrências pendentes)
+- Comprar carrinho (processamento em lote, mantém itens com saldo suficiente)
 - Adicionar produtos à lista de desejos (se não liberado ou com ocorrências pendentes)
 - Bloqueado de comprar se tiver ocorrências não consentidas
 
@@ -333,6 +348,7 @@ PoloCoin/
 - Ver histórico de compras dos alunos
 - Separar compras autorizadas pelo pai das compras diretas
 - Confirmar entrega de produtos comprados
+- Service `comprasServices.js` adaptado com JOIN em `turmas` para suportar filtros de entrega (turma, categoria, produto)
 
 ### Sistema de Pontos (PoloCoins)
 - Saldo de pontos por aluno
@@ -340,15 +356,12 @@ PoloCoin/
 - Crédito automático em avaliações positivas
 - Produtos com custo em pontos (não em Reais)
 
----
-
 ## Próximos Passos (pendentes)
 
 - [ ] Fluxo completo da área do aluno (perfil, ocorrências, senha)
 - [ ] Testes de integração
 - [ ] Validar se todas as rotas estão documentadas
-
----
+- [ ] Entregas Pendentes — página `app/adm/Entregas/` com filtros (produto, categoria, turma). Service `comprasServices.js` já retorna `turma_id`/`turma_nome` (item 16); a página em si ainda não foi criada. (2026-09-25)
 
 ## Notas Técnicas
 
@@ -357,4 +370,4 @@ PoloCoin/
 - Frontend: HTML puro + JS modules, sem framework
 - Conexão com banco: `root` / [REDACTED]
 - Porta do servidor: 3333
-- O app se chama "PoloCoins" — moeda interna é pontos, não Reais
+- O app se chama "PoloCoin" — moeda interna é pontos, não Reais

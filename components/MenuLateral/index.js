@@ -1,11 +1,12 @@
-import TelaLoja from '../../components/TelaLoja/index.js'
-import TelaOcorrencias from '../../components/TelaOcorrencias/index.js'
-import TelaEditarSenha from '../../components/TelaSenha/index.js'
+import TelaLoja from '../TelaLoja/index.js'
+import TelaCarrinho from '../TelaCarrinho/index.js'
+import TelaOcorrencias from '../TelaOcorrencias/index.js'
+import TelaEditarSenha from '../TelaSenha/index.js'
 
 export default function MenuLateral(buttons = {}, user = {}) {
-    // Mapeia os botões dinâmicos com ícones padrão caso não sejam passados
     const iconesPadrao = {
         loja: '🛒',
+        carrinho: '🛍️',
         ocorrencias: '📋',
         senha: '🔒'
     };
@@ -17,22 +18,21 @@ export default function MenuLateral(buttons = {}, user = {}) {
         acao: item.acao || `window.navegarPara('${chave}')`
     }));
 
-    // Registra globalmente as funções do menu
     window.navegarPara = async function(tela) {
         const conteudo = document.getElementById('conteudo-principal');
         if (!conteudo) return;
-        
         conteudo.innerHTML = `
-            <div style="text-align: center; padding: 60px 20px; color: #94a3b8;">
-                <div style="font-size: 32px; margin-bottom: 10px;">⏳</div>
+            <div class="loading-state">
+                <div class="loading-state__icon">⏳</div>
                 <p>Carregando...</p>
-            </div>
-        `;
-
+            </div>`;
         try {
             switch (tela) {
                 case 'loja':
                     await TelaLoja(conteudo, user.id);
+                    break;
+                case 'carrinho':
+                    await TelaCarrinho(conteudo, user.id);
                     break;
                 case 'ocorrencias':
                     await TelaOcorrencias(conteudo, user.id);
@@ -40,16 +40,18 @@ export default function MenuLateral(buttons = {}, user = {}) {
                 case 'senha':
                     await TelaEditarSenha(conteudo, user.id);
                     break;
+                default:
+                    conteudo.innerHTML = `<div class="alert alert-danger"><span>⚠️</span><p>Tela não encontrada.</p></div>`;
             }
         } catch (erro) {
             console.error('Erro ao carregar tela:', erro);
             conteudo.innerHTML = `
-                <div style="text-align: center; padding: 60px 20px; color: #ef4444;">
-                    <div style="font-size: 32px; margin-bottom: 10px;">⚠️</div>
+                <div class="alert alert-danger">
+                    <span>⚠️</span>
                     <p>Erro ao carregar. Tente novamente.</p>
-                </div>
-            `;
+                </div>`;
         }
+        closeMobileSidebar();
     };
 
     window.sair = function() {
@@ -57,107 +59,61 @@ export default function MenuLateral(buttons = {}, user = {}) {
         window.location.href = '/index.html';
     };
 
+    window.toggleMobileSidebar = function() {
+        const sidebar = document.querySelector('.polocoin-sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        if (sidebar) sidebar.classList.toggle('polocoin-sidebar--open');
+        if (overlay) overlay.classList.toggle('polocoin-sidebar-overlay--visible');
+    };
+
+    window.closeMobileSidebar = function() {
+        const sidebar = document.querySelector('.polocoin-sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        if (sidebar) sidebar.classList.remove('polocoin-sidebar--open');
+        if (overlay) overlay.classList.remove('polocoin-sidebar-overlay--visible');
+    };
+
     return `
-        <div style="
-            display: flex;
-            min-height: 100vh;
-            background: #f1f5f9;
-        ">
-            <!-- Menu Lateral -->
-            <aside style="
-                width: 220px;
-                background: white;
-                border-right: 1px solid #e2e8f0;
-                padding: 20px;
-                display: flex;
-                flex-direction: column;
-                gap: 8px;
-            ">
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <div style="
-                        width: 56px;
-                        height: 56px;
-                        background: linear-gradient(135deg, #3b82f6, #2563eb);
-                        border-radius: 50%;
-                        margin: 0 auto 10px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                    ">
-                        <span style="font-size: 24px;">🧑‍🎓</span>
+        <div class="polocoin-layout">
+            <div id="sidebar-overlay" class="polocoin-sidebar-overlay polocoin-sidebar-overlay--hidden"
+                onclick="closeMobileSidebar()"></div>
+            <button class="polocoin-sidebar-toggle" id="sidebar-toggle" onclick="toggleMobileSidebar()">
+                <span class="polocoin-sidebar-toggle__icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <line x1="3" y1="6" x2="21" y2="6"/>
+                        <line x1="3" y1="12" x2="21" y2="12"/>
+                        <line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                </span>
+            </button>
+            <aside class="polocoin-sidebar" id="sidebar">
+                <div class="polocoin-sidebar__header">
+                    <div class="polocoin-sidebar__avatar">
+                        <span>🧑‍🎓</span>
                     </div>
-                    <strong style="color: #0f172a; font-size: 14px;">${user.nome || 'Aluno'}</strong>
-                    <span style="color: #94a3b8; font-size: 11px; display: block; margin-top: 2px;">
-                        Aluno • Turma ${user.serie || '?'}${user.turma || ''}
-                    </span>
+                    <div class="polocoin-sidebar__user-name">${user.nome || 'Aluno'}</div>
                 </div>
-
-                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 10px 0;">
-                
-                ${itensMenu.map(item => `
-                    <button 
-                        onclick="${item.acao}"
-                        style="
-                            background: none;
-                            border: none;
-                            padding: 10px 14px;
-                            border-radius: 8px;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            width: 100%;
-                            text-align: left;
-                            transition: background 0.2s;
-                        "
-                    >
-                        <span style="font-size: 18px;">${item.icone}</span>
-                        <span style="color: #334155; font-size: 14px;">${item.nome}</span>
-                    </button>
-                `).join('')}
-
-                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 10px 0;">
-
-                <button 
-                    onclick="window.sair()"
-                    style="
-                        background: #fef2f2;
-                        border: none;
-                        padding: 10px 14px;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        gap: 10px;
-                        width: 100%;
-                        text-align: left;
-                        color: #dc2626;
-                        font-size: 14px;
-                        transition: background 0.2s;
-                    "
-                >
-                    <span style="font-size: 18px;">🚪</span>
-                    Sair
+                <h1 style="font-size: 18px; text-align: center; margin: -15px 0 -5px 0">PoloCoin</h1>
+                <div class="polocoin-sidebar__divider"></div>
+                <nav class="polocoin-sidebar__nav">
+                    ${itensMenu.map(item => `
+                        <button onclick="${item.acao}" class="polocoin-sidebar__btn">
+                            <span class="polocoin-sidebar__btn-icon">${item.icone}</span>
+                            <span class="polocoin-sidebar__btn-label">${item.nome}</span>
+                        </button>`).join('')}
+                </nav>
+                <div class="polocoin-sidebar__divider"></div>
+                <button onclick="window.sair()" class="polocoin-sidebar__btn polocoin-sidebar__btn-danger">
+                    <span class="polocoin-sidebar__btn-icon">🚪</span>
+                    <span class="polocoin-sidebar__btn-label">Sair</span>
                 </button>
             </aside>
-
-            <!-- Conteúdo Principal -->
-            <main id="conteudo-principal" style="
-                flex: 1;
-                padding: 20px;
-                background: #f8fafc;
-                min-height: 100vh;
-            ">
-                <div style="
-                    text-align: center;
-                    padding: 60px 20px;
-                    color: #94a3b8;
-                ">
-                    <div style="font-size: 48px; margin-bottom: 16px;">👋</div>
-                    <h2 style="color: #334155; font-size: 18px; margin: 0 0 8px 0;">Selecione uma opção</h2>
-                    <p style="font-size: 14px;">Use o menu à esquerda para navegar.</p>
+            <main id="conteudo-principal" class="polocoin-main">
+                <div class="empty-state">
+                    <div class="empty-state__icon">👋</div>
+                    <h2 class="empty-state__text">Selecione uma opção</h2>
+                    <p style="font-size: 14px; color: #94a3b8;">Use o menu à esquerda para navegar.</p>
                 </div>
             </main>
-        </div>
-    `;
+        </div>`;
 }

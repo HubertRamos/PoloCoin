@@ -75,3 +75,52 @@ export async function puxarAvaliacoesPorAluno(alunoId, professorId = null) {
         await connection.end();
     }
 }
+
+/**
+ * Puxa todas as avaliações de uma turma, com nome dos alunos.
+ * Usada pelo painel "Ocorrencias da Turma" do professor.
+ */
+export async function puxarAvaliacoesPorTurma(turmaId) {
+    if (!turmaId) {
+        throw new Error('CAMPOS_VAZIOS');
+    }
+
+    const connection = await mysql.createConnection(dbConfig);
+    try {
+        const query = `
+            SELECT a.id, a.aluno_id, a.professor_id, a.categoria, a.valor, a.pontos, a.observacao,
+                   DATE(a.criado_em) AS data, TIME(a.criado_em) AS hora,
+                   al.nome AS aluno_nome,
+                   p.name AS professor_nome
+            FROM avaliacoes a
+            JOIN alunos al ON a.aluno_id = al.id
+            JOIN professores p ON a.professor_id = p.id
+            WHERE al.turma_id = ?
+            ORDER BY a.criado_em DESC
+        `;
+        const [rows] = await connection.execute(query, [Number(turmaId)]);
+        return rows;
+    } finally {
+        await connection.end();
+    }
+}
+
+/**
+ * Puxa os ids dos alunos de uma turma.
+ */
+export async function puxarIdsAlunosDaTurma(turmaId) {
+    if (!turmaId) {
+        throw new Error('CAMPOS_VAZIOS');
+    }
+
+    const connection = await mysql.createConnection(dbConfig);
+    try {
+        const [rows] = await connection.execute(
+            `SELECT id FROM alunos WHERE turma_id = ?`,
+            [Number(turmaId)]
+        );
+        return rows.map(r => r.id);
+    } finally {
+        await connection.end();
+    }
+}

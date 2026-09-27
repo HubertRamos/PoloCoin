@@ -1,13 +1,18 @@
 import MenuLateral from '/components/MenuLateral/index.js'
 
-const root = document.getElementById('root');
-const user = JSON.parse(sessionStorage.getItem('poloUser') || '{}');
+const root = document.getElementById('root')
+const user = JSON.parse(sessionStorage.getItem('poloUser') || '{}')
 
 const menuConfig = {
     loja: {
         nome: "Minha Loja",
         icone: "🛒",
         acao: "window.navegarPara('loja')"
+    },
+    carrinho: {
+        nome: "Meu Carrinho",
+        icone: "🛍️",
+        acao: "window.navegarPara('carrinho')"
     },
     ocorrencias: {
         nome: "Ocorrências",
@@ -19,21 +24,20 @@ const menuConfig = {
         icone: "🔒",
         acao: "window.navegarPara('senha')"
     }
-};
+}
 
 function renderizarMenu() {
-    root.innerHTML = MenuLateral(menuConfig, user);
-    
-    // Navegar para a tela padrão (loja) após a renderização do HTML
+    root.innerHTML = MenuLateral(menuConfig, user)
+
     if (window.navegarPara) {
-        window.navegarPara('loja');
+        window.navegarPara('loja')
     }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
     if (!user.id) {
-        window.location.href = '/index.html';
-        return;
+        window.location.href = '/index.html'
+        return
     }
-    renderizarMenu();
-});
+    renderizarMenu()
+})

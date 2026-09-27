@@ -1,3 +1,5 @@
+@import '/app/style.css';
+
 * {
     margin: 0;
     padding: 0;
@@ -14,8 +16,613 @@ button {
     font-family: inherit;
 }
 
-/* Animações */
+/* ===== Tela Header ===== */
+
+.tela-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.tela-header__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.tela-header__icon--blue {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+}
+
+.tela-header__icon--orange {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+
+.tela-header__icon--purple {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+}
+
+.tela-header__emoji {
+    font-size: 20px;
+}
+
+.tela-header__info {
+    flex: 1;
+}
+
+.tela-header__title {
+    margin: 0;
+    font-size: 20px;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.tela-header__subtitle {
+    color: #64748b;
+    font-size: 13px;
+    margin: 2px 0 0 0;
+}
+
+/* ===== Saldo Card ===== */
+
+.saldo-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    font-weight: 600;
+}
+
+.saldo-card--blue {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+}
+
+.saldo-card__emoji {
+    font-size: 22px;
+}
+
+.saldo-card__texto {
+    font-size: 14px;
+}
+
+.saldo-card__texto strong {
+    font-size: 16px;
+}
+
+/* ===== Alert Icons ===== */
+
+.alert__icon {
+    font-size: 18px;
+    margin-right: 8px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* ===== Produtos Grid ===== */
+
+.produtos-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ===== Produto Card ===== */
+
+.produto-card {
+    background: white;
+    border-radius: 10px;
+    padding: 16px;
+    border-left: 4px solid #3b82f6;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    margin-bottom: 12px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.produto-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.produto-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.produto-card__nome {
+    font-size: 15px;
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.produto-card__categoria {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 2px;
+    display: block;
+}
+
+.produto-card__preco {
+    text-align: right;
+}
+
+.produto-card__preco-valor {
+    font-size: 18px;
+    font-weight: 700;
+    color: #3b82f6;
+    display: block;
+}
+
+.produto-card__preco-label {
+    font-size: 11px;
+    color: #94a3b8;
+    display: block;
+}
+
+.produto-card__botao {
+    margin-top: 12px;
+}
+
+/* ===== Ocorrências ===== */
+
+.ocorrencia-card {
+    background: white;
+    border-radius: 10px;
+    padding: 16px;
+    border-left: 4px solid #f59e0b;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    margin-bottom: 12px;
+}
+
+.ocorrencia-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.ocorrencia-card__info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ocorrencia-card__emoji {
+    font-size: 22px;
+}
+
+.ocorrencia-card__nome {
+    font-size: 15px;
+    color: #1e293b;
+    font-weight: 600;
+    display: block;
+}
+
+.ocorrencia-card__meta {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 2px;
+    display: block;
+}
+
+.ocorrencia-card__data-badge {
+    font-size: 11px;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+
+.ocorrencia-card__observacao {
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+}
+
+.ocorrencia-card__observacao p {
+    color: #334155;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.ocorrencia-card__detalhes {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* Ocorrências summary */
+.ocorrencias-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+}
+
+.ocorrencias-summary__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ocorrencias-summary__info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ocorrencias-summary__emoji {
+    font-size: 18px;
+}
+
+.ocorrencias-summary__titulo {
+    color: #dc2626;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.ocorrencias-summary__count {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+/* ===== Loading & Empty ===== */
+
+.loading-state {
+    text-align: center;
+    padding: 40px;
+    color: #94a3b8;
+}
+
+.loading-state__icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #94a3b8;
+}
+
+.empty-state__icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.empty-state__title {
+    color: #334155;
+    font-size: 16px;
+    margin: 0 0 4px 0;
+}
+
+.empty-state__text {
+    font-size: 13px;
+}
+
+/* ===== Responsável ===== */
+
+.respons-section {
+    margin-bottom: 24px;
+}
+
+.respons-section__title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 4px 0;
+}
+
+.respons-section__subtitle {
+    font-size: 13px;
+    color: #94a3b8;
+    margin: 0 0 16px 0;
+}
+
+.filhos-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.filho-card {
+    background: white;
+    border-radius: 14px;
+    padding: 18px 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.filho-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #8b5cf6, #6d28d9);
+}
+
+.filho-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+.filho-card__header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.filho-card__avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.filho-card__info {
+    flex: 1;
+    min-width: 0;
+}
+
+.filho-card__nome {
+    font-size: 16px;
+    color: #0f172a;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.filho-card__meta {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 3px;
+    display: block;
+}
+
+.filho-card__saldo {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.filho-card__saldo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    border: 1px solid #bfdbfe;
+    padding: 8px 14px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 15px;
+    color: #1d4ed8;
+}
+
+.filho-card__saldo-badge span {
+    font-size: 13px;
+    font-weight: 400;
+    color: #64748b;
+}
+
+.filho-card__status {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+}
+
+.filho-card__status--liberado {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
+.filho-card__status--bloqueado {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.filho-card__acoes {
+    margin-top: 14px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding-top: 12px;
+    border-top: 1px solid #f1f5f9;
+}
+
+/* Card de desejo */
+
+.desejos-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.desejo-card {
+    background: white;
+    border-radius: 14px;
+    padding: 18px 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.desejo-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #f97316, #ea580c);
+}
+
+.desejo-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+.desejo-card__header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.desejo-card__icone {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #fff7ed, #ffedd5);
+    border: 1px solid #fed7aa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+}
+
+.desejo-card__info {
+    flex: 1;
+    min-width: 0;
+}
+
+.desejo-card__nome {
+    font-size: 16px;
+    color: #0f172a;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.desejo-card__meta {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 3px;
+    display: block;
+}
+
+.desejo-card__acoes {
+    flex-shrink: 0;
+}
+
+.desejo-card__btn-autorizar {
+    white-space: nowrap;
+}
+
+/* ===== Form Message ===== */
+
+.form-message {
+    text-align: center;
+    font-size: 12px;
+    min-height: 18px;
+    margin: 8px 0 0;
+}
+
+/* ===== Animações ===== */
+
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
+}
+
+/* ===== Responsivo ===== */
+
+@media (max-width: 480px) {
+    .tela-header {
+        flex-wrap: wrap;
+    }
+
+    .tela-header__icon {
+        width: 38px;
+        height: 38px;
+        font-size: 16px;
+    }
+
+    .tela-header__title {
+        font-size: 17px;
+    }
+
+    .produto-card__header {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .produto-card__preco {
+        text-align: left;
+    }
+
+    .filho-card__header {
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+
+    .filho-card__saldo {
+        text-align: left;
+    }
+
+    .filho-card__saldo {
+        text-align: left;
+        width: 100%;
+    }
+
+    .filho-card__avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+
+    .filho-card__saldo-badge {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .desejo-card__header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .desejo-card__icone {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
+
+    .desejo-card__acoes {
+        width: 100%;
+        justify-content: flex-end;
+    }
 }

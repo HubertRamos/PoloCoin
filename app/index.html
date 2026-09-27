@@ -4,23 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login - PoloCoin</title>
-    <link rel="stylesheet" href="/app/styles.css" />
-    <!-- Ajuste o caminho do CSS se necessário -->
+    <link rel="stylesheet" href="/app/style.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css"
+      integrity="sha512-QeR2VH+lsBE5LSAe1Q5EnTBbe7XTBubt8dG93Y7gidSgdMCr8nVqKcfKAMyN96SV8KDbZVTDXChatu5G2KQGzg=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
   </head>
 
   <body
+    class="polocoin-main"
     style="
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: rgb(54, 140, 255);
+      min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
     "
   >
-    <div id="root" style="width: 100%; max-width: 400px; padding: 20px"></div>
-
+    <div id="root" class="container-sm"></div>
     <script type="module" src="/app/app.js"></script>
   </body>
 </html>

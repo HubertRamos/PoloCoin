@@ -8,6 +8,7 @@ const root = document.getElementById('root')
 let produtos = []
 let categorias = []
 let compras = []
+let historico = []
 
 const coresCategoria = {
     'Alimentação':  '#10B981',
@@ -27,6 +28,16 @@ function formatarPreco(valor) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(valor))
 }
 
+function formatarData(dateStr) {
+    if (!dateStr) return '—'
+    try {
+        const d = new Date(dateStr)
+        return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    } catch {
+        return dateStr
+    }
+}
+
 async function carregarDados() {
     try {
         const [p, c, comp] = await Promise.all([
@@ -42,43 +53,29 @@ async function carregarDados() {
     }
 }
 
-function formatarData(dateStr) {
-    if (!dateStr) return '—'
-    try {
-        const d = new Date(dateStr)
-        return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-    } catch {
-        return dateStr
-    }
-}
-
 function renderizarCards() {
     const content = document.getElementById('dashboard-content')
     if (!content) return
 
+    console.log('[Ver Produtos] produtos carregados:', produtos.length, '| compras:', compras.length)
+
     if (produtos.length === 0) {
         content.innerHTML = `
-            <p style="color: #94a3b8; text-align: center; padding: 20px;">
-                Nenhum produto cadastrado. Clique em "+ Adicionar" para criar o primeiro.
-            </p>
+            <div class="empty-state" style="grid-column: 1 / -1;">
+                <div class="empty-state__icon">🛒</div>
+                <p class="empty-state__text">Nenhum produto cadastrado. Clique em "+ Adicionar" para criar o primeiro.</p>
+            </div>
         `
         return
     }
 
     content.innerHTML = produtos.map(prod => {
-        const preco = parseFloat(prod.preco) || 0
-        const cor = getCor(prod.categoria_nome)
+        const preco = parseFloat(prod.custo_pontos) || 0
+        const cor = getCor(prod.categoria_nome) || '#64748B'
         const cat = prod.categoria_nome || 'Sem categoria'
 
         return `
-            <div style="
-                background: white;
-                border-radius: 10px;
-                padding: 16px;
-                border-left: 4px solid ${cor};
-                box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-                margin-bottom: 12px;
-            ">
+            <div class="card" style="border-left: 4px solid ${cor};">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                     <div>
                         <strong style="font-size: 15px; color: #1e293b;">${prod.nome}</strong>
@@ -91,33 +88,38 @@ function renderizarCards() {
                 </div>
             </div>
         `
-    }).join('')
+    }).join('') + `
+            <div style="margin-top: 20px; text-align: center;">
+                <button id="btn-voltar-compras" class="btn btn-ghost">
+                    <i class="fa-solid fa-arrow-left" style="font-size: 11px; margin-right: 4px;"></i>
+                    Voltar às Compras
+                </button>
+            </div>
+        `
+    const btnVoltar = document.getElementById('btn-voltar-compras')
+    if (btnVoltar) btnVoltar.addEventListener('click', () => Render())
 }
 
 function renderizarCompras() {
     const content = document.getElementById('dashboard-content')
     if (!content) return
 
-    if (compras.length === 0) {
+    const comprasNaoEntregues = compras.filter(c => !c.entregue)
+
+    if (comprasNaoEntregues.length === 0) {
         content.innerHTML = `
-            <p style="color: #94a3b8; text-align: center; padding: 20px;">
-                Nenhuma compra realizada ainda.
-            </p>
+            <div class="empty-state" style="grid-column: 1 / -1;">
+                <div class="empty-state__icon">🛒</div>
+                <p class="empty-state__text">Nenhuma compra pendente.</p>
+            </div>
         `
         return
     }
 
-    content.innerHTML = compras.map(compra => {
+    content.innerHTML = comprasNaoEntregues.map(compra => {
         const responsavel = compra.responsavel_nome || '— (compra direta)'
         return `
-            <div style="
-                background: white;
-                border-radius: 10px;
-                padding: 14px 16px;
-                border-left: 4px solid #3b82f6;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-                margin-bottom: 10px;
-            ">
+            <div class="card" style="border-left: 4px solid #3b82f6;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                     <div>
                         <strong style="font-size: 14px; color: #1e293b;">${compra.produto_nome}</strong>
@@ -140,31 +142,15 @@ function renderizarCompras() {
 }
 
 function abrirModalAdd() {
-    const categoriaOptions = categorias.map(c => ({ value: c.nome, text: c.nome }))
+    const categoriaOptions = categorias.map(c => ({ id: c.id, nome: c.nome }))
 
     root.innerHTML = `
         ${Header(linksHeader)}
 
-        <main style="
-            padding: 90px 20px 20px;
-            max-width: 480px;
-            margin: 0 auto;
-            animation: fadeIn 0.2s ease;
-        ">
-            <div style="text-align: center; margin-bottom: 20px;">
-                <button id="btn-voltar"
-                    style="
-                        background: none;
-                        border: none;
-                        color: #64748b;
-                        font-size: 13px;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 4px;
-                    "
-                >
-                    <i class="fa-solid fa-arrow-left" style="font-size: 11px;"></i>
+        <main class="polocoin-main" style="max-width: 480px;">
+            <div style="margin-bottom: 20px; text-align: center;">
+                <button id="btn-voltar" class="btn btn-ghost">
+                    <i class="fa-solid fa-arrow-left" style="font-size: 11px; margin-right: 4px;"></i>
                     Voltar aos Produtos
                 </button>
             </div>
@@ -251,77 +237,56 @@ function abrirModalAdd() {
 
 async function Render() {
     await carregarDados()
+    await carregarHistorico()
 
-    // Separa compras por tipo
-    const comprasAutorizadas = compras.filter(c => c.autorizado_por !== null && c.autorizado_por !== '')
-    const comprasDiretas = compras.filter(c => !c.autorizado_por || c.autorizado_por === '')
+    // Separa compras por tipo (só as não entregues)
+    const comprasAutorizadas = compras.filter(c => c.autorizado_por !== null && c.autorizado_por !== '' && !c.entregue)
+    const comprasDiretas = compras.filter(c => (!c.autorizado_por || c.autorizado_por === '') && !c.entregue)
 
     root.innerHTML = `
         ${Header(linksHeader)}
 
-        <main style="padding: 90px 20px 20px; max-width: 900px; margin: 0 auto; animation: fadeIn 0.3s ease;">
-            <div style="margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
-                    <div style="
-                        width: 36px;
-                        height: 36px;
-                        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-                        border-radius: 10px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                    ">
-                        <i class="fa-solid fa-cart-shopping" style="color: white; font-size: 14px;"></i>
+        <main class="polocoin-main">
+            <!-- Cabeçalho da Página -->
+            <div class="polocoin-main__header">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="
+                            width: 36px;
+                            height: 36px;
+                            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+                            border-radius: 10px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        ">
+                            <i class="fa-solid fa-cart-shopping" style="color: white; font-size: 14px;"></i>
+                        </div>
+                        <div>
+                            <h1 class="polocoin-main__title">Produtos</h1>
+                            <p class="polocoin-main__subtitle">Gerencie os produtos da lojinha do PoloCoin.</p>
+                        </div>
                     </div>
-                    <h1 style="margin: 0; font-size: 20px; color: #0f172a; font-weight: 700;">Produtos</h1>
                 </div>
-                <p style="color: #64748b; font-size: 13px; margin: 0;">Gerencie os produtos da lojinha do PoloCoin.</p>
+
+                <div class="polocoin-main__actions">
+                    <button id="btn-ver-produtos" class="btn btn-secondary">
+                        <i class="fa-solid fa-box" style="font-size: 12px;"></i>
+                        Ver Produtos
+                    </button>
+                    <button id="btn-ver-historico" class="btn btn-ghost" style="color: #8B5CF6;">
+                        <i class="fa-solid fa-clock-rotate-left" style="font-size: 12px;"></i>
+                        Histórico (7 dias)
+                    </button>
+                    <button id="btn-adicionar" class="btn btn-primary">
+                        <i class="fa-solid fa-plus" style="font-size: 10px;"></i>
+                        Adicionar Produto
+                    </button>
+                </div>
             </div>
 
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
-                <button id="btn-ver-todos"
-                    style="
-                        display: flex;
-                        align-items: center;
-                        gap: 6px;
-                        padding: 10px 18px;
-                        background: white;
-                        border: 1.5px solid #e2e8f0;
-                        border-radius: 8px;
-                        color: #0f172a;
-                        font-size: 13px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.2s;
-                    "
-                >
-                    <i class="fa-regular fa-eye" style="font-size: 12px;"></i>
-                    Ver Todos
-                </button>
-
-                <button id="btn-adicionar"
-                    style="
-                        display: flex;
-                        align-items: center;
-                        gap: 6px;
-                        padding: 10px 18px;
-                        background: linear-gradient(135deg, #3b82f6, #2563eb);
-                        border: none;
-                        border-radius: 8px;
-                        color: white;
-                        font-size: 13px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-                        transition: all 0.2s;
-                    "
-                >
-                    <i class="fa-solid fa-plus" style="font-size: 10px;"></i>
-                    Adicionar Produto
-                </button>
-            </div>
-            <!-- Compras realizadas -->
-            <div style="margin-top: 30px; margin-bottom: 30px;">
+            <!-- Compras Realizadas -->
+            <div style="margin-top: 24px;">
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
                     <div style="
                         width: 32px;
@@ -341,49 +306,41 @@ async function Render() {
                 </div>
 
                 ${compras.length === 0 ? `
-                    <p style="color: #94a3b8; text-align: center; padding: 20px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div class="alert alert-neutral" style="text-align: center; padding: 20px;">
                         Nenhuma compra realizada ainda.
-                    </p>
+                    </div>
                 ` : `
                     ${comprasAutorizadas.length > 0 ? `
                         <div style="margin-bottom: 16px;">
                             <h3 style="margin: 0 0 10px 0; font-size: 13px; color: #0f172a; font-weight: 600; display: flex; align-items: center; gap: 6px;">
                                 <span style="color: #10B981;">●</span> Autorizadas pelo Responsável (${comprasAutorizadas.length})
                             </h3>
-                            ${comprasAutorizadas.map(c => `
-                                <div style="
-                                    background: white;
-                                    border-radius: 8px;
-                                    padding: 10px 14px;
-                                    border-left: 3px solid ${c.entregue ? '#94a3b8' : '#10B981'};
-                                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                                    margin-bottom: 8px;
-                                    display: flex;
-                                    justify-content: space-between;
-                                    align-items: center;
-                                    gap: 10px;
-                                ">
-                                    <div>
-                                        <strong style="font-size: 13px; color: #1e293b;">${c.produto_nome}</strong>
-                                        <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
-                                            ${c.aluno_nome} · 🪙 ${c.custo_pontos} pontos
+                            <div class="card-grid">
+                                ${comprasAutorizadas.map(c => `
+                                    <div class="card" style="border-left: 3px solid ${c.entregue ? '#94a3b8' : '#10B981'};">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                                            <div>
+                                                <strong style="font-size: 13px; color: #1e293b;">${c.produto_nome}</strong>
+                                                <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+                                                    ${c.aluno_nome} · 🪙 ${c.custo_pontos} pontos
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <div style="text-align: right; font-size: 11px; color: #64748b; min-width: 70px;">
+                                                    ${formatarData(c.criado_em)}
+                                                </div>
+                                                ${c.entregue ? `
+                                                    <span class="badge badge-success">Entregue</span>
+                                                ` : `
+                                                    <button onclick="confirmarEntrega(${c.id})" class="btn btn-success" style="padding: 4px 10px; font-size: 11px;">
+                                                        ✓ Confirmar
+                                                    </button>
+                                                `}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <div style="text-align: right; font-size: 11px; color: #64748b; min-width: 80px;">
-                                            ${formatarData(c.criado_em)}
-                                        </div>
-                                        ${c.entregue ? `
-                                            <span style="font-size: 10px; background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; white-space: nowrap;">Entregue</span>
-                                        ` : `
-                                            <button onclick="confirmarEntrega(${c.id})"
-                                                style="background: #10B981; color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; font-weight: 600; white-space: nowrap;">
-                                                ✓ Confirmar
-                                            </button>
-                                        `}
-                                    </div>
-                                </div>
-                            `).join('')}
+                                `).join('')}
+                            </div>
                         </div>
                     ` : ''}
                     ${comprasDiretas.length > 0 ? `
@@ -391,52 +348,68 @@ async function Render() {
                             <h3 style="margin: 0 0 10px 0; font-size: 13px; color: #0f172a; font-weight: 600; display: flex; align-items: center; gap: 6px;">
                                 <span style="color: #F59E0B;">●</span> Compras Diretas (${comprasDiretas.length})
                             </h3>
-                            ${comprasDiretas.map(c => `
-                                <div style="
-                                    background: white;
-                                    border-radius: 8px;
-                                    padding: 10px 14px;
-                                    border-left: 3px solid ${c.entregue ? '#94a3b8' : '#F59E0B'};
-                                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                                    margin-bottom: 8px;
-                                    display: flex;
-                                    justify-content: space-between;
-                                    align-items: center;
-                                    gap: 10px;
-                                ">
-                                    <div>
-                                        <strong style="font-size: 13px; color: #1e293b;">${c.produto_nome}</strong>
-                                        <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
-                                            ${c.aluno_nome} · 🪙 ${c.custo_pontos} pontos
+                            <div class="card-grid">
+                                ${comprasDiretas.map(c => `
+                                    <div class="card" style="border-left: 3px solid ${c.entregue ? '#94a3b8' : '#F59E0B'};">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                                            <div>
+                                                <strong style="font-size: 13px; color: #1e293b;">${c.produto_nome}</strong>
+                                                <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+                                                    ${c.aluno_nome} · 🪙 ${c.custo_pontos} pontos
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 10px;">
+                                                <div style="text-align: right; font-size: 11px; color: #64748b; min-width: 80px;">
+                                                    ${formatarData(c.criado_em)}
+                                                </div>
+                                                ${c.entregue ? `
+                                                    <span class="badge badge-success">Entregue</span>
+                                                ` : `
+                                                    <button onclick="confirmarEntrega(${c.id})" class="btn" style="background: #F59E0B; color: white; padding: 4px 10px; font-size: 11px;">
+                                                        ✓ Confirmar
+                                                    </button>
+                                                `}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <div style="text-align: right; font-size: 11px; color: #64748b; min-width: 80px;">
-                                            ${formatarData(c.criado_em)}
-                                        </div>
-                                        ${c.entregue ? `
-                                            <span style="font-size: 10px; background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; white-space: nowrap;">Entregue</span>
-                                        ` : `
-                                            <button onclick="confirmarEntrega(${c.id})"
-                                                style="background: #F59E0B; color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; font-weight: 600; white-space: nowrap;">
-                                                ✓ Confirmar
-                                            </button>
-                                        `}
-                                    </div>
-                                </div>
-                            `).join('')}
+                                `).join('')}
+                            </div>
                         </div>
                     ` : ''}
                 `}
             </div>
+
+            <!-- Histórico de Vendas (7 dias) -->
+            <div id="historico-section" style="margin-top: 24px; display: none;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                    <div style="
+                        width: 32px;
+                        height: 32px;
+                        background: linear-gradient(135deg, #06B6D4, #3B82F6);
+                        border-radius: 8px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <i class="fa-solid fa-chart-line" style="color: white; font-size: 13px;"></i>
+                    </div>
+                    <div>
+                        <h2 style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 700;">Histórico de Vendas</h2>
+                        <p style="color: #64748b; font-size: 12px; margin: 0;">Últimos 7 dias · Limpeza automática a cada 7 dias</p>
+                    </div>
+                </div>
+                <div id="historico-content"></div>
+            </div>
         </main>
+
+        <div id="dashboard-content"></div>
 
         <style>
             @keyframes fadeIn {
                 from { opacity: 0; }
                 to { opacity: 1; }
             }
-            #btn-ver-todos:hover { background: #f1f5f9; }
+            #btn-ver-produtos:hover { background: #f1f5f9; }
             #btn-adicionar:hover {
                 transform: translateY(-1px);
                 box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
@@ -444,8 +417,16 @@ async function Render() {
         </style>
     `
 
-    const btnVer = document.getElementById('btn-ver-todos')
-    if (btnVer) btnVer.addEventListener('click', () => renderizarCards())
+    const btnVerProdutos = document.getElementById('btn-ver-produtos')
+    if (btnVerProdutos) btnVerProdutos.addEventListener('click', () => {
+        console.log('[Ver Produtos] clicado')
+        renderizarCards()
+    })
+
+    const btnVerHistorico = document.getElementById('btn-ver-historico')
+    if (btnVerHistorico) btnVerHistorico.addEventListener('click', () => {
+        renderizarHistorico()
+    })
 
     const btnAdd = document.getElementById('btn-adicionar')
     if (btnAdd) btnAdd.addEventListener('click', abrirModalAdd)
@@ -454,62 +435,60 @@ async function Render() {
 // Nova função para mostrar as compras no dashboard do adm
 async function RenderCompras() {
     await carregarDados()
-    
+
     const comprasAutorizadas = compras.filter(c => c.autorizado_por !== null && c.autorizado_por !== '')
     const comprasDiretas = compras.filter(c => !c.autorizado_por || c.autorizado_por === '')
 
     root.innerHTML = `
         ${Header(linksHeader)}
 
-        <main style="padding: 90px 20px 20px; max-width: 900px; margin: 0 auto; animation: fadeIn 0.3s ease;">
-            <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                <div style="
-                    width: 36px;
-                    height: 36px;
-                    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-                    border-radius: 10px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                ">
-                    <i class="fa-solid fa-receipt" style="color: white; font-size: 14px;"></i>
+        <main class="polocoin-main">
+            <!-- Cabeçalho -->
+            <div class="polocoin-main__header">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="
+                            width: 36px;
+                            height: 36px;
+                            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+                            border-radius: 10px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        ">
+                            <i class="fa-solid fa-receipt" style="color: white; font-size: 14px;"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <h1 class="polocoin-main__title">Compras Realizadas</h1>
+                            <p class="polocoin-main__subtitle">Histórico de compras dos alunos</p>
+                        </div>
+                    </div>
                 </div>
-                <div style="flex: 1;">
-                    <h1 style="margin: 0; font-size: 20px; color: #0f172a; font-weight: 700;">Compras Realizadas</h1>
-                    <p style="color: #64748b; font-size: 13px; margin: 0;">Histórico de compras dos alunos</p>
-                </div>
-                <button id="btn-voltar-compras"
-                    style="
-                        background: none;
-                        border: none;
-                        color: #64748b;
-                        font-size: 13px;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 4px;
-                    "
-                >
-                    <i class="fa-solid fa-chevron-left" style="font-size: 11px;"></i>
+
+                <button id="btn-voltar-compras" class="btn btn-ghost">
+                    <i class="fa-solid fa-chevron-left" style="font-size: 11px; margin-right: 4px;"></i>
                     Voltar
                 </button>
             </div>
 
             ${compras.length === 0 ? `
-                <p style="color: #94a3b8; text-align: center; padding: 40px;">Nenhuma compra realizada ainda.</p>
+                <div class="alert alert-neutral" style="text-align: center; padding: 40px;">
+                    Nenhuma compra realizada ainda.
+                </div>
             ` : `
-                <div style="margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
-                    <div style="background: #dcfce7; border-radius: 8px; padding: 10px 16px; flex: 1; min-width: 200px;">
-                        <div style="font-size: 11px; color: #64748b; margin-bottom: 2px;">TOTAL DE COMPRAS</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #166534;">${compras.length}</div>
+                <!-- Stats -->
+                <div style="margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div class="stat-card stat-card--success">
+                        <div class="stat-card__label">TOTAL DE COMPRAS</div>
+                        <div class="stat-card__value">${compras.length}</div>
                     </div>
-                    <div style="background: #dbeafe; border-radius: 8px; padding: 10px 16px; flex: 1; min-width: 200px;">
-                        <div style="font-size: 11px; color: #64748b; margin-bottom: 2px;">AUTORIZADAS PELO PAI</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #1e40af;">${comprasAutorizadas.length}</div>
+                    <div class="stat-card stat-card--info">
+                        <div class="stat-card__label">AUTORIZADAS PELO PAI</div>
+                        <div class="stat-card__value">${comprasAutorizadas.length}</div>
                     </div>
-                    <div style="background: #fef3c7; border-radius: 8px; padding: 10px 16px; flex: 1; min-width: 200px;">
-                        <div style="font-size: 11px; color: #64748b; margin-bottom: 2px;">COMPRAS DIRETAS</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #92400e;">${comprasDiretas.length}</div>
+                    <div class="stat-card stat-card--warning">
+                        <div class="stat-card__label">COMPRAS DIRETAS</div>
+                        <div class="stat-card__value">${comprasDiretas.length}</div>
                     </div>
                 </div>
 
@@ -518,41 +497,35 @@ async function RenderCompras() {
                         <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #0f172a; font-weight: 600;">
                             ✅ Autorizadas pelo Responsável (${comprasAutorizadas.length})
                         </h3>
-                        ${comprasAutorizadas.map(compra => `
-                            <div style="
-                                background: white;
-                                border-radius: 10px;
-                                padding: 14px 16px;
-                                border-left: 4px solid #10B981;
-                                box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-                                margin-bottom: 10px;
-                            ">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 10px;">
+                        <div class="card-grid">
+                            ${comprasAutorizadas.map(compra => `
+                                <div class="card" style="border-left: 4px solid #10B981;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 10px;">
                                     <div>
-                                        <strong style="font-size: 14px; color: #1e293b;">${compra.produto_nome}</strong>
-                                        <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
-                                            Aluno: ${compra.aluno_nome} · 🪙 ${compra.custo_pontos} pontos
-                                        </div>
+                                    <strong style="font-size: 14px; color: #1e293b;">${compra.produto_nome}</strong>
+                                    <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
+                                        Aluno: ${compra.aluno_nome} · 🪙 ${compra.custo_pontos} pontos
+                                    </div>
                                     </div>
                                     <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
-                                        <div style="font-size: 11px; color: #64748b;">
-                                            ${formatarData(compra.criado_em)}
-                                        </div>
-                                        <div style="font-size: 12px; color: #3b82f6;">
-                                            👨‍👧 Responsável: ${compra.responsavel_nome}
-                                        </div>
-                                        ${compra.entregue ? `
-                                            <span style="font-size: 11px; background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600;">✓ Entregue</span>
-                                        ` : `
-                                            <button onclick="confirmarEntrega(${compra.id})"
-                                                style="background: #10B981; color: white; border: none; border-radius: 6px; padding: 4px 12px; font-size: 11px; cursor: pointer; font-weight: 600;">
-                                                ✓ Confirmar Entrega
-                                            </button>
-                                        `}
+                                    <div style="font-size: 11px; color: #64748b;">
+                                        ${formatarData(compra.criado_em)}
+                                    </div>
+                                    <div style="font-size: 12px; color: #3b82f6;">
+                                        👨‍👧 Responsável: ${compra.responsavel_nome}
+                                    </div>
+                                    ${compra.entregue ? `
+                                        <span class="badge badge-success">✓ Entregue</span>
+                                    ` : `
+                                        <button onclick="confirmarEntrega(${compra.id})" class="btn btn-success" style="padding: 4px 10px; font-size: 11px;">
+                                            ✓ Confirmar
+                                        </button>
+                                    `}
+                                    </div>
                                     </div>
                                 </div>
-                            </div>
-                        `).join('')}
+                            `).join('')}
+                        </div>
                     </div>
                 ` : ''}
 
@@ -561,58 +534,140 @@ async function RenderCompras() {
                         <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #0f172a; font-weight: 600;">
                             🔓 Compras Diretas (${comprasDiretas.length})
                         </h3>
-                        ${comprasDiretas.map(compra => `
-                            <div style="
-                                background: white;
-                                border-radius: 10px;
-                                padding: 14px 16px;
-                                border-left: 4px solid #F59E0B;
-                                box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-                                margin-bottom: 10px;
-                            ">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 10px;">
+                        <div class="card-grid">
+                            ${comprasDiretas.map(compra => `
+                                <div class="card" style="border-left: 4px solid #F59E0B;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 10px;">
                                     <div>
-                                        <strong style="font-size: 14px; color: #1e293b;">${compra.produto_nome}</strong>
-                                        <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
-                                            Aluno: ${compra.aluno_nome} · 🪙 ${compra.custo_pontos} pontos
-                                        </div>
+                                    <strong style="font-size: 14px; color: #1e293b;">${compra.produto_nome}</strong>
+                                    <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
+                                        Aluno: ${compra.aluno_nome} · 🪙 ${compra.custo_pontos} pontos
+                                    </div>
                                     </div>
                                     <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
-                                        <div style="font-size: 11px; color: #64748b;">
-                                            ${formatarData(compra.criado_em)}
-                                        </div>
-                                        <div style="font-size: 12px; color: #dc2626;">
-                                            ⚠️ Compra sem autorização do responsável
-                                        </div>
-                                        ${compra.entregue ? `
-                                            <span style="font-size: 11px; background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600;">✓ Entregue</span>
-                                        ` : `
-                                            <button onclick="confirmarEntrega(${compra.id})"
-                                                style="background: #F59E0B; color: white; border: none; border-radius: 6px; padding: 4px 12px; font-size: 11px; cursor: pointer; font-weight: 600;">
-                                                ✓ Confirmar Entrega
-                                            </button>
-                                        `}
+                                    <div style="font-size: 11px; color: #64748b;">
+                                        ${formatarData(compra.criado_em)}
+                                    </div>
+                                    <div style="font-size: 12px; color: #dc2626;">
+                                        ⚠️ Compra sem autorização do responsável
+                                    </div>
+                                    ${compra.entregue ? `
+                                        <span class="badge badge-success">✓ Entregue</span>
+                                    ` : `
+                                        <button onclick="confirmarEntrega(${compra.id})" class="btn" style="background: #F59E0B; color: white; padding: 4px 10px; font-size: 11px;">
+                                            ✓ Confirmar
+                                        </button>
+                                    `}
+                                    </div>
                                     </div>
                                 </div>
-                            </div>
-                        `).join('')}
+                            `).join('')}
+                        </div>
                     </div>
                 ` : ''}
             `}
+        </main>
 
-            <style>
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                #btn-voltar-compras:hover { color: #0f172a; }
-            </style>
-        `
+        <style>
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            #btn-voltar-compras:hover { color: #0f172a; }
+        </style>
+    `
+
     const btnVoltar = document.getElementById('btn-voltar-compras')
     if (btnVoltar) btnVoltar.addEventListener('click', () => Render())
 }
 
-window.addEventListener('DOMContentLoaded', Render)
+// Garante execução mesmo se o DOM já estiver pronto quando o módulo carregar
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', Render)
+} else {
+    Render()
+}
+
+window.confirmarEntrega = confirmarEntrega
+window.Render = Render
+window.renderizarCards = renderizarCards
+window.renderizarHistorico = renderizarHistorico
+window.limparHistorico = limparHistorico
+
+async function carregarHistorico() {
+    try {
+        const res = await fetch('/admin/historico-vendas')
+        if (!res.ok) throw new Error('Erro ao buscar histórico')
+        historico = await res.json()
+        const lastCleanup = localStorage.getItem('historicoLastCleanup')
+        const now = Date.now()
+        if (!lastCleanup || now - Number(lastCleanup) > 7 * 24 * 60 * 60 * 1000) {
+            try {
+                const r = await fetch('/admin/historico-vendas/limpar', { method: 'DELETE' })
+                if (!r.ok) throw new Error('Erro ao limpar')
+            } catch (e) { console.error('Limpeza automática falhou:', e) }
+            localStorage.setItem('historicoLastCleanup', now.toString())
+        }
+        renderizarHistorico()
+    } catch (err) {
+        console.error('Erro ao carregar histórico:', err)
+        historico = []
+    }
+}
+
+async function renderizarHistorico() {
+    const section = document.getElementById('historico-section')
+    const content = document.getElementById('historico-content')
+    if (!section || !content) return
+    const isHidden = section.style.display === 'none' || !section.style.display
+    section.style.display = isHidden ? 'block' : 'none'
+    if (isHidden && historico.length === 0) {
+        await carregarHistorico()
+        return
+    }
+    if (historico.length === 0) {
+        content.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;"><div class="empty-state__icon">📋</div><p class="empty-state__text">Nenhuma venda nos últimos 7 dias.</p></div>`
+        return
+    }
+    const hoje = new Date()
+    const cleanupHtml = `<button id="btn-limpar-historico" onclick="limparHistorico()" class="btn btn-ghost" style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">🗑 Limpar histórico</button>`
+    content.innerHTML = cleanupHtml + historico.map(c => {
+        const data = new Date(c.criado_em)
+        const diffDays = Math.floor((hoje - data) / (1000 * 60 * 60 * 24))
+        const diffStr = diffDays === 0 ? 'Hoje' : diffDays === 1 ? 'Ontem' : diffDays + 'd atrás'
+        const resp = c.responsavel_nome || '— (compra direta)'
+        return `<div class="card" style="border-left: 3px solid #06B6D4;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                <div>
+                    <strong style="font-size: 13px; color: #1e293b;">${c.produto_nome}</strong>
+                    <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">${c.aluno_nome} · 🪙 ${c.custo_pontos} pontos</div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 4px;">${diffStr} · ${formatarData(c.criado_em)}</div>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                    <span class="badge" style="background: ${c.entregue ? '#dcfce7' : '#fef3c7'}; color: ${c.entregue ? '#166534' : '#92400e'}; font-size: 10px; padding: 2px 8px; border-radius: 10px;">${c.entregue ? 'Entregue' : 'Pendente'}</span>
+                    <div style="font-size: 11px; color: #3b82f6;">${c.autorizado_por ? '✅ ' + resp : '⚡ Compra direta'}</div>
+                </div>
+            </div>
+        </div>`
+    }).join('')
+    const btnLimpar = document.getElementById('btn-limpar-historico')
+    if (btnLimpar) btnLimpar.addEventListener('click', limparHistorico)
+}
+
+async function limparHistorico() {
+    try {
+        const res = await fetch('/admin/historico-vendas/limpar', { method: 'DELETE' })
+        const data = await res.json()
+        if (!res.ok) { alert(data.error || 'Erro ao limpar histórico.'); return }
+        alert(data.message)
+        historico = []
+        localStorage.setItem('historicoLastCleanup', Date.now().toString())
+        renderizarHistorico()
+    } catch (err) {
+        alert('Erro de conexão. Tente novamente.')
+        console.error(err)
+    }
+}
 
 async function confirmarEntrega(compraId) {
     try {

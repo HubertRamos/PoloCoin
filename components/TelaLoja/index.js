@@ -1,258 +1,333 @@
-import Header from '../Header/index.js'
+import Header from '../Header/index.js';
 
-/**
- * Tela de Loja - Exibe todos os produtos disponíveis para compra (em pontos)
- * Se o pai não liberou, o aluno adiciona à lista de desejos ao invés de comprar.
- */
+const CARRINHO_KEY = 'poloCarrinho';
+
+function lerCarrinho() {
+    try {
+        return JSON.parse(sessionStorage.getItem(CARRINHO_KEY) || '[]');
+    } catch { return []; }
+}
+
+function salvarCarrinho(items) {
+    sessionStorage.setItem(CARRINHO_KEY, JSON.stringify(items));
+}
+
+function totalCarrinho(items) {
+    if (!Array.isArray(items)) return 0;
+    return items.reduce((s, i) => s + Number(i.custo || 0) * (Number(i.quantidade) || 1), 0);
+}
+
 export default async function TelaLoja(root, alunoId) {
     root.innerHTML = `
-        ${Header({ 'Sair': ['/index.html'] })}
-
-        <main style="
-            padding: 20px;
-            max-width: 900px;
-            margin: 0 auto;
-            animation: fadeIn 0.3s ease;
-        ">
+        <main class="container-center polocoin-main__section--centered" style="max-width: 900px;">
             <!-- Cabeçalho -->
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-                <div style="
-                    width: 40px;
-                    height: 40px;
-                    background: linear-gradient(135deg, #3b82f6, #2563eb);
-                    border-radius: 10px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                ">
-                    <span style="font-size: 20px;">🪙</span>
+            <div class="tela-header">
+                <div class="tela-header__icon tela-header__icon--blue">
+                    <span class="tela-header__emoji">🪙</span>
                 </div>
-                <div>
-                    <h1 style="margin: 0; font-size: 20px; color: #0f172a; font-weight: 700;">Minha Loja</h1>
-                    <p style="color: #64748b; font-size: 13px; margin: 0;">Produtos disponíveis para compra</p>
+                <div class="tela-header__info">
+                    <h1 class="tela-header__title">Minha Loja</h1>
+                    <p class="tela-header__subtitle">Produtos disponíveis para compra</p>
                 </div>
             </div>
 
-            <!-- Saldo do Aluno -->
-            <div id="loja-saldo" style="
-                background: linear-gradient(135deg, #3b82f6, #2563eb);
-                color: white;
-                border-radius: 12px;
-                padding: 14px 20px;
-                margin-bottom: 20px;
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                font-weight: 600;
-            ">
-                <span style="font-size: 22px;">🪙</span>
-                <span>Seu saldo: <strong id="loja-saldo-valor">—</strong> PoloCoins</span>
+            <!-- Saldo + Carrinho inline -->
+            <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+                <div id="loja-saldo" class="saldo-card saldo-card--blue" style="flex: 1; min-width: 200px;">
+                    <span class="saldo-card__emoji">🪙</span>
+                    <span class="saldo-card__texto">Saldo: <strong id="loja-saldo-valor">—</strong> 🪙</span>
+                </div>
+                <div id="loja-carrinho-badge" class="saldo-card" style="background: linear-gradient(135deg, #3B82F6, #2563EB); cursor: pointer;" onclick="window.navegarPara('carrinho')">
+                    <span style="color: white; font-size: 13px; font-weight: 600;">
+                        🛒 Carrinho
+                        <span id="loja-carrinho-qtd" style="background: rgba(255,255,255,0.3); padding: 1px 8px; border-radius: 10px; margin-left: 4px; font-size: 12px;">0</span>
+                    </span>
+                    <span style="color: rgba(255,255,255,0.85); font-size: 13px; margin-left: 8px;">
+                        Total: <strong id="loja-carrinho-total">0</strong> 🪙
+                    </span>
+                </div>
             </div>
 
             <!-- Status de liberação -->
-            <div id="loja-status-liberacao" style="margin-bottom: 16px; font-size: 13px;"></div>
+            <div id="loja-status-liberacao" class="alert alert-warning" style="display: none; margin-bottom: 16px;">
+                <div class="alert__icon">🔒</div>
+                <span>Compras <strong>bloqueadas</strong> pelo seu responsável. Produtos vão direto para os desejos.</span>
+            </div>
+
+            <!-- Filtros -->
+            <div id="loja-filtros" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+                <input id="loja-busca" type="text" placeholder="Buscar produto..."
+                    style="flex: 1; min-width: 160px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px;"
+                    oninput="window.filtrarLoja()">
+                <select id="loja-filtro-categoria" style="padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; background: #fff; min-width: 140px;"
+                    onchange="window.filtrarLoja()">
+                    <option value="">Todas as categorias</option>
+                </select>
+                <button id="loja-limpar-filtros" class="btn btn-ghost" style="font-size: 12px; padding: 8px 12px; color: #94a3b8;"
+                    onclick="window.limparFiltrosLoja()">
+                    ✕ Limpar
+                </button>
+            </div>
 
             <!-- Loading -->
-            <div id="loja-loading" style="
-                text-align: center;
-                padding: 40px;
-                color: #94a3b8;
-            ">
-                <div style="font-size: 32px; margin-bottom: 10px;">🛒</div>
+            <div id="loja-loading" class="loading-state">
+                <div class="loading-state__icon">🛒</div>
                 <p>Carregando produtos...</p>
             </div>
 
             <!-- Lista de produtos -->
             <div id="loja-produtos" style="display: none;">
-                <div style="
-                    background: rgba(255,255,255,0.8);
-                    border-radius: 12px;
-                    padding: 20px;
-                    border: 1px solid #e2e8f0;
-                ">
-                    <div style="margin-bottom: 16px;">
-                        <h2 style="margin: 0 0 4px 0; font-size: 15px; color: #0f172a; font-weight: 600;">
-                            Todos os Produtos
-                        </h2>
-                        <span id="loja-contagem" style="color: #94a3b8; font-size: 13px;"></span>
+                <div class="card card--lg" style="padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h2 class="card__title-lg" style="margin: 0; font-size: 16px;">Produtos</h2>
+                        <span id="loja-contagem" class="text-muted" style="font-size: 13px;"></span>
                     </div>
-                    <div id="loja-grid"></div>
+                    <div id="loja-grid" class="produtos-grid"></div>
                 </div>
             </div>
 
-            <!-- Carrinho/Compra -->
-            <div id="loja-carrinho" style="display: none; margin-top: 20px;">
-                <div style="
-                    background: #ecfdf5;
-                    border: 1px solid #86efac;
-                    border-radius: 10px;
-                    padding: 16px;
-                ">
-                    <h3 style="margin: 0 0 10px 0; color: #10B981; font-size: 14px;">Compra Realizada!</h3>
-                    <p id="loja-mensagem" style="color: #334155; font-size: 13px; margin: 0;"></p>
-                </div>
-            </div>
+            <!-- Feedback compra -->
+            <div id="loja-feedback" class="alert" style="display: none; margin-top: 16px;"></div>
 
             <!-- Saldo insuficiente -->
-            <div id="loja-saldo-insuficiente" style="display: none; margin-top: 20px;">
-                <div style="
-                    background: #fef2f2;
-                    border: 1px solid #fecaca;
-                    border-radius: 10px;
-                    padding: 16px;
-                    text-align: center;
-                ">
-                    <h3 style="margin: 0 0 8px 0; color: #dc2626; font-size: 14px;">Saldo Insuficiente</h3>
-                    <p style="color: #334155; font-size: 13px; margin: 0;">
-                        Você precisa de <strong id="loja-falta"></strong> 🪙 para comprar este produto.
-                        Seu saldo atual é de <strong id="loja-saldo-atual"></strong> 🪙.
+            <div id="loja-saldo-insuficiente" class="alert alert-danger" style="display: none; margin-top: 16px;">
+                <div class="alert__icon">⚠️</div>
+                <div>
+                    <h3 style="margin: 0 0 6px 0; color: #991B1B; font-size: 14px;">Saldo Insuficiente</h3>
+                    <p style="margin: 0; font-size: 13px;">
+                        Falta <strong id="loja-falta"></strong> 🪙. Saldo atual: <strong id="loja-saldo-atual"></strong> 🪙.
                     </p>
                 </div>
             </div>
 
             <!-- Desejo adicionado -->
-            <div id="loja-desejo-adicionado" style="display: none; margin-top: 20px;">
-                <div style="
-                    background: #fefce8;
-                    border: 1px solid #fde68a;
-                    border-radius: 10px;
-                    padding: 16px;
-                    text-align: center;
-                ">
-                    <h3 style="margin: 0 0 8px 0; color: #ca8a04; font-size: 14px;">✅ Desejo Adicionado!</h3>
-                    <p style="color: #334155; font-size: 13px; margin: 0;">
-                        Seu responsável receberá_notificação e poderá autorizar a compra.
-                    </p>
+            <div id="loja-desejo-adicionado" class="alert alert-warning" style="display: none; margin-top: 16px;">
+                <div class="alert__icon">✅</div>
+                <div>
+                    <h3 style="margin: 0 0 6px 0; color: #92400E; font-size: 14px;">Adicionado aos Desejos!</h3>
+                    <p style="margin: 0; font-size: 13px; color: #92400E;">Seu responsável será avisado.</p>
                 </div>
             </div>
         </main>
+    `;
 
-        <style>
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-        </style>
-    `
-
-    // Busca saldo e permissão do aluno
-    const dados = JSON.parse(sessionStorage.getItem('poloUser') || '{}')
-    const alunoIdNum = dados?.id || alunoId
-
+    console.log('sessionStorage poloUser:', sessionStorage.getItem('poloUser'))
+    const dados = JSON.parse(sessionStorage.getItem('poloUser') || '{}');
+    const alunoIdNum = dados?.id || alunoId;
     try {
-        const saldoResp = await fetch(`/aluno/saldo?id=${alunoIdNum}`)
-        const saldoData = await saldoResp.json()
-        const saldo = saldoData.pontos || 0
-        document.getElementById('loja-saldo-valor').textContent = saldo
-    } catch (erro) {
-        console.error('Erro ao buscar saldo:', erro)
-        document.getElementById('loja-saldo-valor').textContent = '?'
+        const res = await fetch(`/aluno/saldo?id=${alunoIdNum}`);
+        const data = await res.json();
+        document.getElementById('loja-saldo-valor').textContent = data.pontos || 0;
+    } catch {
+        document.getElementById('loja-saldo-valor').textContent = '?';
     }
 
-    // Verifica se o aluno tem permissão para comprar (pai liberou?)
-    let alunoPodeComprar = false
+    // Permissão
+    let podeComprar = false;
     try {
-        const respPermissao = await fetch(`/aluno/pode-comprar?id=${alunoIdNum}`)
-        // Se a rota não existir ainda, vamos assumir false
-        if (respPermissao.ok) {
-            const permData = await respPermissao.json()
-            alunoPodeComprar = permData.pode_comprar === true || permData.pode_comprar === 1
+        const resp = await fetch(`/aluno/pode-comprar?id=${alunoIdNum}`);
+        if (resp.ok) {
+            const d = await resp.json();
+            podeComprar = d.pode_comprar === true || d.pode_comprar === 1;
         }
-    } catch (e) {
-        console.log('Rota de permissão não disponível, assumindo bloqueado:', e)
+    } catch { /* rota pode não existir */ }
+
+    if (!podeComprar) {
+        document.getElementById('loja-status-liberacao').style.display = 'block';
     }
 
-    if (!alunoPodeComprar) {
-        document.getElementById('loja-status-liberacao').innerHTML = `
-            <div style="
-                background: #fef3c7;
-                border: 1px solid #fcd34d;
-                border-radius: 8px;
-                padding: 10px 14px;
-                color: #92400e;
-                font-size: 13px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            ">
-                <span>🔒</span>
-                <span>Compras <strong>bloqueadas</strong> pelo seu responsável. Clique em um produto para adicionar à sua lista de desejos e avisar a ele.</span>
-            </div>
-        `
-    }
-
-    // Carrega produtos
+    // Categorias para filtro
+    let categorias = [];
     try {
-        const resposta = await fetch('/produtos')
-        const produtos = await resposta.json()
+        const res = await fetch('/categorias/filtro');
+        categorias = await res.json();
+        const sel = document.getElementById('loja-filtro-categoria');
+        categorias.forEach(c => {
+            sel.innerHTML += `<option value="${c.nome}">${c.nome}</option>`;
+        });
+    } catch { /* ignora */ }
 
-        document.getElementById('loja-loading').style.display = 'none'
-        document.getElementById('loja-produtos').style.display = 'block'
-        document.getElementById('loja-contagem').textContent = `(${produtos.length} itens)`
-        document.getElementById('loja-grid').innerHTML = produtos.map(p => {
-            const btnText = alunoPodeComprar
-                ? `Comprar — 🪙 ${p.custo_pontos}`
-                : `➕ Adicionar aos Desejos`
-            const btnAction = alunoPodeComprar
-                ? `window.comprarProduto(${p.id}, ${p.custo_pontos})`
-                : `window.adicionarDesejo(${p.id})`
-            return `
-                <div style="
-                    background: white;
-                    border-radius: 10px;
-                    padding: 16px;
-                    border-left: 4px solid ${getCorCategoria(p.categoria_nome)};
-                    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-                    margin-bottom: 12px;
-                ">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <strong style="font-size: 15px; color: #1e293b;">${p.nome}</strong>
-                            <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">${p.categoria_nome || 'Sem categoria'}</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 18px; font-weight: 700; color: #3b82f6;">
-                                🪙 ${p.custo_pontos} PoloCoins
+    // Produtos
+    await carregarProdutos('', '');
+
+    // Botão de limpar filtros
+    document.getElementById('loja-limpar-filtros').addEventListener('click', () => {
+        window.limparFiltrosLoja();
+    });
+
+    // Atualiza badge do carrinho após carregar
+    atualizarBadgeCarrinho();
+
+    window.filtrarLoja = async () => {
+        const busca = document.getElementById('loja-busca').value;
+        const cat = document.getElementById('loja-filtro-categoria').value;
+        await carregarProdutos(cat, busca);
+    };
+
+    window.limparFiltrosLoja = async () => {
+        document.getElementById('loja-busca').value = '';
+        document.getElementById('loja-filtro-categoria').value = '';
+        await carregarProdutos('', '');
+    };
+
+    window.adicionarAoCarrinho = (p) => {
+        const carrinho = lerCarrinho();
+        const existing = carrinho.find(i => i.id === p.id);
+        if (existing) {
+            existing.quantidade += 1;
+        } else {
+            const custo = Number(p.custo || 0);
+            carrinho.push({ id: p.id, nome: p.nome || 'Produto', custo, quantidade: 1 });
+        }
+        salvarCarrinho(carrinho);
+        atualizarBadgeCarrinho();
+        exibirFeedback('success', `✅ ${p.nome || 'Produto'} adicionado ao carrinho!`);
+    };
+
+    window.removerDoCarrinho = (id) => {
+        const carrinho = lerCarrinho();
+        const item = carrinho.find(i => i.id === id);
+        if (item) {
+            if ((item.quantidade || 1) > 1) {
+                item.quantidade -= 1;
+            } else {
+                const idx = carrinho.indexOf(item);
+                carrinho.splice(idx, 1);
+            }
+        }
+        salvarCarrinho(carrinho);
+        atualizarBadgeCarrinho();
+        window.navegarPara('carrinho');
+    };
+
+    window.adicionarDesejo = (produtoId) => {
+        const btn = document.querySelector(`button[data-id="${produtoId}"]`);
+        if (btn) btn.disabled = true;
+        fetch('/aluno/desejos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ aluno_id: alunoIdNum, produto_id: produtoId })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) {
+                exibirFeedback('danger', `❌ ${d.error}`);
+                if (btn) btn.disabled = false;
+            } else {
+                exibirFeedback('warning', '✅ Produto adicionado aos desejos! Aguarde autorização do responsável.');
+            }
+        })
+        .catch(() => {
+            exibirFeedback('danger', '❌ Erro de conexão.');
+            if (btn) btn.disabled = false;
+        });
+    };
+
+    window.confirmarCarrinho = async () => {
+        const carrinho = lerCarrinho();
+        if (carrinho.length === 0) {
+            exibirFeedback('warning', 'Seu carrinho está vazio.');
+            return;
+        }
+        const btn = document.getElementById('btn-confirmar-carrinho');
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Processando...';
+
+        try {
+            const res = await fetch('/aluno/comprar-carrinho', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ aluno_id: alunoIdNum, produtos: carrinho })
+            });
+            const data = await res.json();
+
+            salvarCarrinho([]);
+            atualizarBadgeCarrinho();
+
+            if (res.ok) {
+                let msg = `✅ <strong>Compra realizada!</strong><br>`;
+                data.comprados.forEach(c => {
+                    msg += `✅ ${c.nome} (🪙 ${c.custo})<br>`;
+                });
+                if (data.saldo_restante !== null) {
+                    msg += `<br>Saldo restante: <strong>🪙 ${data.saldo_restante}</strong>`;
+                }
+                exibirFeedback('success', msg);
+                await carregarProdutos(document.getElementById('loja-filtro-categoria').value, document.getElementById('loja-busca').value);
+            } else {
+                let msg = `❌ <strong>Erro na compra:</strong><br>`;
+                data.erros?.forEach(e => {
+                    msg += `❌ ${e.msg}<br>`;
+                });
+                if (!msg.includes('<br>')) msg += data.error || 'Erro desconhecido.';
+                exibirFeedback('danger', msg);
+            }
+        } catch (e) {
+            exibirFeedback('danger', '❌ Erro de conexão. Tente novamente.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '🛒 Confirmar Compra';
+        }
+    };
+
+    async function carregarProdutos(cat, busca) {
+        try {
+            const res = await fetch(`/produtos/filtrados?categoria=${encodeURIComponent(cat)}&busca=${encodeURIComponent(busca)}`);
+            const produtos = await res.json();
+
+            document.getElementById('loja-loading').style.display = 'none';
+            document.getElementById('loja-produtos').style.display = 'block';
+            document.getElementById('loja-contagem').textContent = `(${produtos.length} itens)`;
+            document.getElementById('loja-grid').innerHTML = produtos.map(p => {
+                const btnText = podeComprar ? 'Adicionar ao Carrinho' : 'Adicionar aos Desejos';
+                const cor = getCorCategoria(p.categoria_nome) || '#64748B';
+                const custo = p.custo_pontos ?? 0;
+                const nome = p.nome || 'Produto sem nome';
+                console.log('[TelaLoja] Produto carregado:', { id: p.id, nome, custo, categoria: p.categoria_nome });
+                return `
+                    <div class="produto-card" style="border-left-color: ${cor};">
+                        <div class="produto-card__header">
+                            <div>
+                                <strong class="produto-card__nome">${nome}</strong>
+                                <span class="produto-card__categoria">${p.categoria_nome || 'Sem categoria'}</span>
                             </div>
-                            <div style="font-size: 11px; color: #94a3b8;">ID: ${p.id}</div>
+                            <div class="produto-card__preco">
+                                <span class="produto-card__preco-valor">🪙 ${custo}</span>
+                                <span class="produto-card__preco-label">PoloCoins</span>
+                            </div>
                         </div>
+                        <button
+                            data-id="${p.id}"
+                            onclick="${podeComprar
+                                ? `window.adicionarAoCarrinho({id:${p.id}, nome:'${nome.replace(/'/g, "\\'")}', custo:${custo}})`
+                                : `window.adicionarDesejo(${p.id})`
+                            }"
+                            class="btn btn-primary btn--sm produto-card__botao"
+                        >
+                            ${btnText}
+                        </button>
                     </div>
-                    <button
-                        data-id="${p.id}"
-                        data-custo="${p.custo_pontos}"
-                        onclick="${btnAction}"
-                        style="
-                            width: 100%;
-                            margin-top: 12px;
-                            padding: 10px;
-                            background: linear-gradient(135deg, #3b82f6, #2563eb);
-                            border: none;
-                            border-radius: 8px;
-                            color: white;
-                            font-size: 13px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            gap: 6px;
-                        "
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 8v8M8 12h8"/>
-                        </svg>
-                        ${btnText}
-                    </button>
-                </div>
-            `
-        }).join('')
-    } catch (erro) {
-        console.error('Erro ao carregar produtos:', erro)
-        document.getElementById('loja-loading').innerHTML = `
-            <div style="font-size: 32px; margin-bottom: 10px;">⚠️</div>
-            <p style="color: #ef4444;">Erro ao carregar produtos. Tente novamente.</p>
-        `
+                `;
+            }).join('');
+        } catch (e) {
+            console.error('Erro ao carregar produtos:', e);
+            document.getElementById('loja-loading').innerHTML = `<p style="color:#ef4444;">Erro ao carregar. Tente novamente.</p>`;
+        }
+    }
+
+    function atualizarBadgeCarrinho() {
+        const carrinho = lerCarrinho();
+        const totalItens = carrinho.reduce((s, i) => s + (Number(i.quantidade) || 1), 0);
+        document.getElementById('loja-carrinho-qtd').textContent = totalItens;
+        document.getElementById('loja-carrinho-total').textContent = totalCarrinho(carrinho);
+    }
+
+    function exibirFeedback(tipo, html) {
+        const el = document.getElementById('loja-feedback');
+        el.className = `alert alert-${tipo}`;
+        el.style.display = 'block';
+        el.innerHTML = html;
+        setTimeout(() => { el.style.display = 'none'; }, 5000);
     }
 }
 
@@ -265,116 +340,6 @@ function getCorCategoria(nome) {
         'Eletrônicos':  '#8B5CF6',
         'Brinquedos':   '#F97316',
         'Outros':       '#64748B',
-    }
-    return cores[nome] || '#64748B'
-}
-
-// Função global para comprar (lógica normal com saldo)
-window.comprarProduto = async function(id, custo) {
-    const dados = JSON.parse(sessionStorage.getItem('poloUser') || '{}')
-    if (!dados.id) {
-        alert('Você precisa estar logado para comprar.')
-        return
-    }
-
-    try {
-        const resposta = await fetch('/aluno/comprar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aluno_id: dados.id, produto_id: id }),
-        })
-
-        const resultado = await resposta.json()
-
-        if (resposta.ok) {
-            const novoSaldo = resultado.saldo_restante
-            document.getElementById('loja-saldo-valor').textContent = novoSaldo
-
-            const container = document.getElementById('loja-carrinho')
-            container.style.display = 'block'
-            document.getElementById('loja-mensagem').textContent =
-                `✅ Você comprou: ${resultado.produto?.nome || 'Produto'} por 🪙 ${resultado.produto?.custo_pontos} pontos. Saldo restante: 🪙 ${novoSaldo}`
-
-            const botao = document.querySelector(`button[data-id="${id}"]`)
-            if (botao) {
-                botao.disabled = true
-                botao.style.opacity = '0.5'
-                botao.style.cursor = 'default'
-                botao.innerHTML = '✅ Comprado'
-            }
-
-            setTimeout(() => {
-                container.style.display = 'none'
-            }, 5000)
-        } else {
-            if (resultado.error && resultado.error.includes('Saldo insuficiente')) {
-                document.getElementById('loja-saldo-insuficiente').style.display = 'block'
-                document.getElementById('loja-falta').textContent = custo
-                document.getElementById('loja-saldo-atual').textContent = (await getSaldo(dados.id)) || 0
-                setTimeout(() => {
-                    document.getElementById('loja-saldo-insuficiente').style.display = 'none'
-                }, 4000)
-            }
-            alert(resultado.error || 'Erro ao realizar pedido.')
-        }
-    } catch (erro) {
-        console.error('Erro na compra:', erro)
-        alert('Erro de conexão. Tente novamente.')
-    }
-}
-
-// Função para adicionar produto aos desejos (quando pai bloqueou)
-window.adicionarDesejo = async function(id) {
-    const dados = JSON.parse(sessionStorage.getItem('poloUser') || '{}')
-    if (!dados.id) {
-        alert('Você precisa estar logado para adicionar desejos.')
-        return
-    }
-
-    try {
-        const resposta = await fetch('/aluno/desejos', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aluno_id: dados.id, produto_id: id }),
-        })
-
-        const resultado = await resposta.json()
-
-        if (resposta.ok) {
-            // Mostra feedback
-            const container = document.getElementById('loja-desejo-adicionado')
-            container.style.display = 'block'
-            setTimeout(() => {
-                container.style.display = 'none'
-            }, 4000)
-
-            // Atualiza botão visual
-            const botao = document.querySelector(`button[data-id="${id}"]`)
-            if (botao) {
-                botao.disabled = true
-                botao.style.opacity = '0.6'
-                botao.style.cursor = 'default'
-                botao.innerHTML = '✅ Nos Desejos'
-            }
-        } else {
-            if (resultado.error && resultado.error.includes('produto já está')) {
-                alert('Este produto já está na sua lista de desejos.')
-            } else {
-                alert(resultado.error || 'Erro ao adicionar desejo.')
-            }
-        }
-    } catch (erro) {
-        console.error('Erro ao adicionar desejo:', erro)
-        alert('Erro de conexão. Tente novamente.')
-    }
-}
-
-async function getSaldo(alunoId) {
-    try {
-        const res = await fetch(`/aluno/saldo?id=${alunoId}`)
-        const data = await res.json()
-        return data.pontos || 0
-    } catch {
-        return 0
-    }
+    };
+    return cores[nome] || '#64748B';
 }

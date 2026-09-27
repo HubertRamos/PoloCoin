@@ -1,143 +1,91 @@
-import Header from '../Header/index.js'
-
-/**
- * Tela de Ocorrências - Painel de leitura apenas para aluno
- */
 export default async function TelaOcorrencias(root, alunoId) {
     root.innerHTML = `
-        ${Header({ 'Sair': ['/index.html'] })}
-
-        <main style="
-            padding: 20px;
-            max-width: 700px;
-            margin: 0 auto;
-            animation: fadeIn 0.3s ease;
-        ">
-            <!-- Cabeçalho -->
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-                <div style="
-                    width: 40px;
-                    height: 40px;
-                    background: linear-gradient(135deg, #F59E0B, #D97706);
-                    border-radius: 10px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                ">
-                    <span style="font-size: 20px;">📋</span>
-                </div>
-                <div>
-                    <h1 style="margin: 0; font-size: 20px; color: #0f172a; font-weight: 700;">Minhas Ocorrências</h1>
-                    <p style="color: #64748b; font-size: 13px; margin: 0;">Visualização apenas - sem edições</p>
-                </div>
+        <div class="resp-dashboard">
+            <div class="resp-header">
+                <h1 class="resp-header__title">Ocorrências</h1>
+                <p class="resp-header__subtitle">Visualização das ocorrências registradas</p>
             </div>
 
-            <!-- Loading -->
-            <div id="obs-loading" style="
-                text-align: center;
-                padding: 40px;
-                color: #94a3b8;
-            ">
-                <div style="font-size: 32px; margin-bottom: 10px;">⏳</div>
+            <div id="obs-loading" class="loading-state">
+                <div class="loading-state__icon">⏳</div>
                 <p>Carregando ocorrências...</p>
             </div>
 
-            <!-- Lista vazia -->
-            <div id="obs-vazio" style="display: none; text-align: center; padding: 40px; color: #94a3b8;">
-                <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
-                <h2 style="color: #334155; font-size: 16px; margin: 0 0 4px 0;">Nenhuma ocorrência registrada</h2>
-                <p style="font-size: 13px;">Parabéns! Nenhuma ocorrência negativa foi registrada sobre você.</p>
-            </div>
-
-            <!-- Lista de ocorrências -->
-            <div id="obs-lista" style="display: none;">
-                <div style="
-                    background: rgba(255,255,255,0.8);
-                    border-radius: 12px;
-                    padding: 20px;
-                    border: 1px solid #e2e8f0;
-                ">
-                    <div style="margin-bottom: 16px;">
-                        <h2 style="margin: 0 0 4px 0; font-size: 15px; color: #0f172a; font-weight: 600;">
-                            Ocorrências Registradas
-                        </h2>
-                        <span id="obs-contagem" style="color: #94a3b8; font-size: 13px;"></span>
-                    </div>
-                    <div id="obs-grid"></div>
-                </div>
-            </div>
-        </main>
-
-        <style>
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-        </style>
+            <div id="obs-content" style="display: none;"></div>
+        </div>
     `
 
-    // Carrega ocorrências do aluno
     try {
         const resposta = await fetch(`/aluno/ocorrencias?id=${alunoId}`)
         const ocorrencias = await resposta.json()
 
         document.getElementById('obs-loading').style.display = 'none'
+        const content = document.getElementById('obs-content')
 
         if (ocorrencias.length === 0) {
-            document.getElementById('obs-vazio').style.display = 'block'
-        } else {
-            document.getElementById('obs-lista').style.display = 'block'
-            document.getElementById('obs-contagem').textContent = `(${ocorrencias.length} ocorrência${ocorrencias.length > 1 ? 's' : ''})`
-            document.getElementById('obs-grid').innerHTML = `
-                <div style="background: #fef2f2; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; border: 1px solid #fecaca;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 18px;">⚠️</span>
-                            <span style="color: #dc2626; font-weight: 600; font-size: 13px;">Ocorrências Negativas</span>
-                        </div>
-                        <span style="color: #dc2626; font-weight: 600;">${ocorrencias.length}</span>
+            content.innerHTML = `
+                <div class="resp-secao">
+                    <div class="resp-secao__header">
+                        <div class="resp-secao__icon resp-secao__icon--purple">✅</div>
+                        <h2 class="resp-secao__title">Nenhuma ocorrência</h2>
+                    </div>
+                    <div class="empty-block">
+                        <div class="empty-block__icon">🎉</div>
+                        <p class="empty-block__text">Parabéns! Nenhuma ocorrência negativa foi registrada.</p>
                     </div>
                 </div>
-                ${ocorrencias.map(oc => `
-                    <div style="
-                        background: white;
-                        border-radius: 10px;
-                        padding: 16px;
-                        border-left: 4px solid ${getCorOcorrencia(oc.valor)};
-                        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-                        margin-bottom: 12px;
-                    ">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <span style="font-size: 22px;">📌</span>
-                                <div>
-                                    <strong style="font-size: 15px; color: #1e293b;">${oc.aluno_nome || 'Aluno'}</strong>
-                                    <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
-                                        ${oc.serie || '?'}º${oc.turma || '?'} · ${oc.categoria || 'Geral'}
+            `
+            content.style.display = 'block'
+            return
+        }
+
+
+        content.innerHTML = `
+            <div class="resp-secao">
+                <div class="resp-secao__header">
+                    <div class="resp-secao__icon resp-secao__icon--orange">⚠️</div>
+                    <h2 class="resp-secao__title">Ocorrências Negativas</h2>
+                    <span class="resp-secao__count">${ocorrencias.length} ocorrência${ocorrencias.length > 1 ? 's' : ''}</span>
+                </div>
+                <div class="ocorrencias-grid">
+                    ${ocorrencias.map(oc => `
+                        <div class="ocorrencia-card" style="border-left-color: ${getCorOcorrencia(oc.valor)};">
+                            <div class="ocorrencia-card__top">
+                                <div class="ocorrencia-card__info">
+                                    <span class="ocorrencia-card__emoji">📌</span>
+                                    <div>
+                                        <strong class="ocorrencia-card__aluno">${oc.aluno_nome || 'Aluno'}</strong>
+                                        <span class="ocorrencia-card__meta">
+                                            ${oc.serie || '?'}º${oc.turma || '?'} · ${oc.categoria || 'Geral'}
+                                        </span>
                                     </div>
                                 </div>
+                                <span class="ocorrencia-card__data">${formatarDataHora(oc.data, oc.hora)}</span>
                             </div>
-                            <span style="font-size: 11px; color: #64748b; background: #f1f5f9; padding: 3px 8px; border-radius: 20px; white-space: nowrap;">
-                                ${formatarDataHora(oc.data, oc.hora)}
-                            </span>
+                            <div class="ocorrencia-card__observacao">
+                                <p>"${oc.observacao || oc.valor || 'Sem observação'}"</p>
+                            </div>
+                            <div class="ocorrencia-card__detalhes">
+                                <span><strong>Pontos:</strong> ${oc.pontos ?? '—'}</span>
+                                <span><strong>Valor:</strong> ${oc.valor || '—'}</span>
+                            </div>
                         </div>
-                        <div style="background: #f8fafc; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px;">
-                            <p style="color: #334155; font-size: 13px; line-height: 1.5; margin: 0;">"${oc.observacao || oc.valor || 'Sem observação'}"</p>
-                        </div>
-                        <div style="display: flex; gap: 16px; font-size: 12px; color: #64748b;">
-                            <span><strong>Pontos:</strong> ${oc.pontos ?? '—'}</span>
-                            <span><strong>Valor:</strong> ${oc.valor || '—'}</span>
-                        </div>
-                    </div>
-                `).join('')}
-            `
-        }
+                    `).join('')}
+                </div>
+            </div>
+        `
+        content.style.display = 'block'
     } catch (erro) {
         console.error('Erro ao carregar ocorrências:', erro)
-        document.getElementById('obs-loading').innerHTML = `
-            <div style="font-size: 32px; margin-bottom: 10px;">⚠️</div>
-            <p style="color: #ef4444;">Erro ao carregar ocorrências. Tente novamente.</p>
+        const content = document.getElementById('obs-content')
+        content.innerHTML = `
+            <div class="resp-secao">
+                <div class="empty-block">
+                    <p class="alert alert-danger" style="text-align: center; padding: 20px;">Erro ao carregar ocorrências. Tente novamente.</p>
+                </div>
+            </div>
         `
+        content.style.display = 'block'
     }
 }
 

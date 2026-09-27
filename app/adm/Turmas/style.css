@@ -1,20 +1,26 @@
+@import '/app/style.css';
 
 * {
     margin: 0px;
     padding: 0px;
-    box-sizing: border-box; 
+    box-sizing: border-box;
 }
 
 body {
-    background-color: rgb(54, 140, 255);
     min-height: 100vh;
-    display: flex;
-    flex-direction: row;     
-    flex-wrap: wrap;        
-    align-items: center;    
-    justify-content: center; 
-    gap: 20px;              
-    padding: 20px;          
 }
 
+button {
+    font-family: inherit;
+}
 
+/* Botões de ação nos cards */
+.card-turma__arrow {
+    font-size: 18px;
+    color: #3b82f6;
+    transition: transform 0.2s;
+}
+
+.card-turma:hover .card-turma__arrow {
+    transform: translateX(4px);
+}

@@ -1,130 +1,36 @@
-import Header from '../Header/index.js'
-
-/**Tela do Responsável - Painel com filhos, saldos e pedidos de compra */
-export default async function TelaResponsavel(root) {
+/** Renderiza o dashboard do responsável (filhos + desejos) */
+export async function renderDashboard(root) {
     const user = JSON.parse(sessionStorage.getItem('poloUser') || '{}')
+
     root.innerHTML = `
-        ${Header({ 'Sair': ['/index.html'] })}
-
-        <main style="
-            padding: 20px;
-            max-width: 900px;
-            margin: 0 auto;
-            animation: fadeIn 0.3s ease;
-        ">
-            <!-- Cabeçalho -->
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-                <div style="
-                    width: 40px;
-                    height: 40px;
-                    background: linear-gradient(135deg, #8B5CF6, #7C3AED);
-                    border-radius: 10px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                ">
-                    <span style="font-size: 20px;">👨‍ 👧‍👦</span>
-                </div>
-                <div>
-                    <h1 style="margin: 0; font-size: 20px; color: #0f172a; font-weight: 700;">Painel do Responsável</h1>
-                    <p style="color: #64748b; font-size: 13px; margin: 0;">Controle os saldos e pedidos de compra dos seus filhos</p>
-                </div>
+        <div class="resp-dashboard">
+            <div class="resp-header">
+                <h1 class="resp-header__title">Painel do Responsável</h1>
+                <p class="resp-header__subtitle">Controle os saldos e pedidos de compra dos seus filhos</p>
             </div>
 
-            <!-- Filhos com saldos -->
-            <div id="resp-filhossection" style="
-                background: rgba(255,255,255,0.8);
-                border-radius: 12px;
-                padding: 20px;
-                border: 1px solid #e2e8f0;
-                margin-bottom: 20px;
-            ">
-                <div style="margin-bottom: 16px;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 15px; color: #0f172a; font-weight: 600;">Meus Filhos — Saldos</h2>
-                    <span id="resp-filhos-contagem" style="color: #94a3b8; font-size: 13px;"></span>
+            <div id="resp-stats" class="resp-stats"></div>
+
+            <div class="resp-secao">
+                <div class="resp-secao__header">
+                    <div class="resp-secao__icon resp-secao__icon--purple">👨‍👧‍👦</div>
+                    <h2 class="resp-secao__title">Meus Filhos</h2>
+                    <span id="resp-filhos-count" class="resp-secao__count"></span>
                 </div>
-                <div id="resp-filhos-grid"></div>
+                <div id="resp-filhos-grid" class="filhos-grid"></div>
             </div>
 
-            <!-- Desejos dos filhos -->
-            <div id="resp-desejossection" style="
-                background: rgba(255,255,255,0.8);
-                border-radius: 12px;
-                padding: 20px;
-                border: 1px solid #e2e8f0;
-            ">
-                <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 18px;">📝</span>
-                    <h2 style="margin: 0; font-size: 15px; color: #0f172a; font-weight: 600;">Pedidos de Compra dos Filhos</h2>
+            <div class="resp-secao">
+                <div class="resp-secao__header">
+                    <div class="resp-secao__icon resp-secao__icon--orange">📦</div>
+                    <h2 class="resp-secao__title">Pedidos de Compra</h2>
+                    <span id="resp-desejos-count" class="resp-secao__count"></span>
                 </div>
-                <div id="resp-desejos-grid"></div>
+                <div id="resp-desejos-grid" class="desejos-grid"></div>
             </div>
-        </main>
-
-        <style>
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-
-            .resp-filho-card {
-                background: white;
-                border-radius: 10px;
-                padding: 16px;
-                border-left: 4px solid #8B5CF6;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-                margin-bottom: 12px;
-            }
-
-            .resp-desejo-card {
-                background: white;
-                border-radius: 10px;
-                padding: 14px 16px;
-                border-left: 4px solid #F97316;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-                margin-bottom: 12px;
-            }
-
-            .resp-botao-autorizar {
-                padding: 8px 16px;
-                background: linear-gradient(135deg, #10B981, #059669);
-                border: none;
-                border-radius: 6px;
-                color: white;
-                font-size: 12px;
-                font-weight: 600;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                gap: 4px;
-            }
-
-            .resp-botao-autorizar:disabled {
-                opacity: 0.5;
-                cursor: not-allowed;
-            }
-
-            .resp-botao-bloquear, .resp-botao-liberar {
-                padding: 6px 12px;
-                border: none;
-                border-radius: 6px;
-                color: white;
-                font-size: 12px;
-                font-weight: 600;
-                cursor: pointer;
-            }
-
-            .resp-botao-bloquear {
-                background: #ef4444;
-            }
-
-            .resp-botao-liberar {
-                background: #10B981;
-            }
-        </style>
+        </div>
     `
 
-    // Carrega filhos e desejos
     try {
         const [filhosResp, desejosResp] = await Promise.all([
             fetch(`/responsavel/filhos?id=${user.id}`),
@@ -134,67 +40,90 @@ export default async function TelaResponsavel(root) {
         const filhos = await filhosResp.json()
         const desejosData = await desejosResp.json()
 
-        document.getElementById('resp-filhos-contagem').textContent = `(${filhos.length} filho${filhos.length !== 1 ? 's' : ''})`
+        // Stats
+        const totalDesejos = desejosData.reduce((s, item) => s + (item.desejos?.length || 0), 0)
 
+
+
+        document.getElementById('resp-filhos-count').textContent = `(${filhos.length})`
+        document.getElementById('resp-desejos-count').textContent = `(${totalDesejos})`
+
+        // Filhos
+        const filhosGrid = document.getElementById('resp-filhos-grid')
         if (filhos.length === 0) {
-            document.getElementById('resp-filhos-grid').innerHTML = `
-                <p style="color: #64748b; text-align: center; padding: 20px;">Nenhum filho associado a você.</p>
+            filhosGrid.innerHTML = `
+                <div class="empty-block" style="grid-column: 1/-1;">
+                    <div class="empty-block__icon">👶</div>
+                    <p class="empty-block__text">Nenhum filho associado a você.</p>
+                </div>
             `
         } else {
-            document.getElementById('resp-filhos-grid').innerHTML = filhos.map(filho => `
-                <div class="resp-filho-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong style="font-size: 15px; color: #1e293b;">${filho.nome}</strong>
-                            <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
-                                ${filho.serie || '?'}º${filho.turma || '?'} · ID: ${filho.id}
+            filhosGrid.innerHTML = filhos.map(filho => {
+                const inicial = (filho.nome || '?')[0]
+                const statusClass = filho.pode_comprar ? 'filho-status--liberado' : 'filho-status--bloqueado'
+                const statusText = filho.pode_comprar ? '✅ Liberado' : '🔒 Bloqueado'
+                return `
+                    <div class="filho-card">
+                        <div class="filho-card__top">
+                            <div class="filho-avatar">${inicial}</div>
+                            <div class="filho-info">
+                                <h3 class="filho-nome">${filho.nome}</h3>
+                                <span class="filho-meta">
+                                    ${filho.serie || '?'}º${filho.turma || '?'} · ID ${filho.id}
+                                </span>
+                            </div>
+                            <div class="filho-saldo">
+                                <div class="filho-saldo__badge">
+                                    🪙 ${filho.pontos} <span>PoloCoins</span>
+                                </div>
+                                <span class="filho-status ${statusClass}">${statusText}</span>
                             </div>
                         </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 18px; font-weight: 700; color: #3b82f6;">
-                                🪙 ${filho.pontos} PoloCoins
-                            </div>
-                            <div style="font-size: 11px; color: ${filho.pode_comprar ? '#10B981' : '#ef4444'};">
-                                ${filho.pode_comprar ? '✅ Compra liberada' : '🔒 Compra bloqueada'}
-                            </div>
+                        <div class="filho-card__acoes">Liberdade de compra
+                            ${filho.pode_comprar
+                                ? `<button class="btn btn-danger btn--sm" onclick="window.bloquearCompra(${filho.id})">🔒 Bloquear</button>`
+                                : `<button class="btn btn-success btn--sm" onclick="window.liberarCompra(${filho.id})">🔓 Liberar</button>`}
                         </div>
                     </div>
-                    <div style="margin-top: 10px; display: flex; gap: 8px; justify-content: flex-end;">
-                        ${filho.pode_comprar
-                            ? `<button class="resp-botao-bloquear" onclick="window.bloquearCompra(${filho.id})">🔒 Bloquear</button>`
-                            : `<button class="resp-botao-liberar" onclick="window.liberarCompra(${filho.id})">🔓 Liberar</button>`
-                        }
-                    </div>
-                </div>
-            `).join('')
+                `
+            }).join('')
         }
 
-        // Desejos dos filhos
+        // Desejos
         const todosDesejos = desejosData.flatMap(item =>
-            item.desejos.map(d => ({
+            (item.desejos || []).map(d => ({
                 aluno: item.aluno,
                 ...d
             }))
         )
 
+        const desejosGrid = document.getElementById('resp-desejos-grid')
         if (todosDesejos.length === 0) {
-            document.getElementById('resp-desejos-grid').innerHTML = `
-                <p style="color: #64748b; text-align: center; padding: 20px;">Nenhum pedido de compra pendente. 😊</p>
+            desejosGrid.innerHTML = `
+                <div class="empty-block" style="grid-column: 1/-1;">
+                    <div class="empty-block__icon">🎉</div>
+                    <p class="empty-block__text">Nenhum pedido de compra pendente.</p>
+                </div>
             `
         } else {
-            document.getElementById('resp-desejos-grid').innerHTML = todosDesejos.map(desejo => `
-                <div class="resp-desejo-card">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <strong style="font-size: 14px; color: #1e293b;">${desejo.produto_nome}</strong>
-                            <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
-                                Filho: ${desejo.aluno.nome} · 🪙 ${desejo.custo_pontos} PoloCoins
-                            </div>
+            desejosGrid.innerHTML = todosDesejos.map(desejo => `
+                <div class="desejo-card">
+                    <div class="desejo-card__top">
+                        <div class="desejo-icone">📦</div>
+                        <div class="desejo-info">
+                            <h3 class="desejo-nome">${desejo.produto_nome}</h3>
+                            <span class="desejo-meta">
+                                Filho: ${desejo.aluno?.nome || '—'} · 🪙 ${desejo.custo_pontos} PoloCoins
+                            </span>
                         </div>
-                        <button class="resp-botao-autorizar"
-                            onclick="window.autorizarCompra(${desejo.aluno_id}, ${desejo.produto_id}, '${desejo.produto_nome.replace(/'/g, "\\'")}', ${desejo.custo_pontos})"
-                        >
-                            ✅ Autorizar Compra
+                        <div class="desejo-preco">
+                            <span class="desejo-preco__value">🪙 ${desejo.custo_pontos}</span>
+                            <span class="desejo-preco__label">custo</span>
+                        </div>
+                    </div>
+                    <div class="desejo-card__acoes">
+                        <button class="btn btn-success btn--sm" onclick="window.autorizarCompra(${desejo.aluno_id}, ${desejo.produto_id}, '${desejo.produto_nome.replace(/'/g, "\\'")}', ${desejo.custo_pontos})">
+                            ✅ Autorizar
                         </button>
                     </div>
                 </div>
@@ -202,82 +131,13 @@ export default async function TelaResponsavel(root) {
         }
     } catch (erro) {
         console.error('Erro ao carregar dados do responsável:', erro)
-        document.getElementById('resp-filhos-grid').innerHTML = `
-            <p style="color: #ef4444; text-align: center; padding: 20px;">Erro ao carregar dados. Tente novamente.</p>
-        `
-    }
-}
-
-// Função global para liberar compra
-window.liberarCompra = async function(alunoId) {
-    try {
-        const resposta = await fetch('/aluno/pode-comprar', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aluno_id: alunoId, pode_comprar: true }),
-        })
-
-        if (resposta.ok) {
-            alert('✅ Compra liberada para este aluno!')
-            window.location.reload()
-        } else {
-            alert('Erro ao liberar compra.')
+        const filhosGrid = document.getElementById('resp-filhos-grid')
+        if (filhosGrid) {
+            filhosGrid.innerHTML = `
+                <div class="empty-block" style="grid-column: 1/-1;">
+                    <p class="alert alert-danger" style="text-align: center; padding: 20px;">Erro ao carregar dados. Tente novamente.</p>
+                </div>
+            `
         }
-    } catch (erro) {
-        console.error('Erro ao liberar compra:', erro)
-        alert('Erro de conexão.')
-    }
-}
-
-// Função global para bloquear compra
-window.bloquearCompra = async function(alunoId) {
-    try {
-        const resposta = await fetch('/aluno/pode-comprar', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aluno_id: alunoId, pode_comprar: false }),
-        })
-
-        if (resposta.ok) {
-            alert('🔒 Compra bloqueada para este aluno!')
-            window.location.reload()
-        } else {
-            alert('Erro ao bloquear compra.')
-        }
-    } catch (erro) {
-        console.error('Erro ao bloquear compra:', erro)
-        alert('Erro de conexão.')
-    }
-}
-
-// Função global para autorizar compra do filho
-window.autorizarCompra = async function(alunoId, produtoId, nomeProduto, custoPontos) {
-    // Confirmação antes de autorizar
-    if (!confirm(`Autorizar a compra de "${nomeProduto}" (🪙 ${custoPontos} pontos) para o aluno?`)) {
-        return
-    }
-
-    try {
-        const resposta = await fetch('/responsavel/comprar-desejo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aluno_id: alunoId, produto_id: produtoId }),
-        })
-
-        const resultado = await resposta.json()
-
-        if (resposta.ok) {
-            alert(`✅ Compra autorizada!\n\n"${resultado.produto?.nome}" por 🪙 ${resultado.produto?.custo_pontos} pontos.\nSaldo restante do aluno: 🪙 ${resultado.saldo_restante}`)
-            window.location.reload()
-        } else {
-            if (resultado.error && resultado.error.includes('Saldo insuficiente')) {
-                alert('❌ O aluno não tem pontos suficientes para esta compra.')
-            } else {
-                alert('❌ Erro ao autorizar compra: ' + (resultado.error || 'Desconhecido'))
-            }
-        }
-    } catch (erro) {
-        console.error('Erro ao autorizar compra:', erro)
-        alert('Erro de conexão.')
     }
 }

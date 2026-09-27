@@ -5,7 +5,7 @@ import { criarProfessor, puxarProfessores } from './services/professoresServices
 import { criarTurma, puxarTurmas } from './services/turmasServices.js';
 import { criarAlunoComResponsavel, puxarAlunosPorTurma, puxarAvaliacoesDoAluno, atualizarSenhaAluno } from './services/alunosServices.js';
 import { login } from './services/authServices.js';
-import { criarAvaliacao, puxarAvaliacoesPorAluno } from './services/avaliacoesServices.js';
+import { criarAvaliacao, puxarAvaliacoesPorAluno, puxarAvaliacoesPorTurma } from './services/avaliacoesServices.js';
 import { atualizarSenhaProfessor, buscarProfessorPorId } from './services/professorServices.js';
 import { puxarAlunosDoResponsavel } from './services/responsavelServices.js';
 import { puxarOcorrenciasNegativasDoResponsavel, marcarComoConsentida } from './services/responsavelOcorrenciasServices.js';
@@ -265,6 +265,18 @@ app.get('/avaliacoes/:alunoId', async (req, res) => {
     }
 });
 
+// --- Rotas para ocorrências da turma (todas as avaliações) ---
+app.get('/turmas/:turmaId/avaliacoes', async (req, res) => {
+    const { turmaId } = req.params;
+    try {
+        const avaliacoes = await puxarAvaliacoesPorTurma(turmaId);
+        return res.status(200).json(avaliacoes);
+    } catch (error) {
+        console.error('ERRO AO BUSCAR AVALIAÇÕES DA TURMA:', error);
+        return res.status(500).json({ error: 'Erro ao buscar avaliações da turma.' });
+    }
+});
+
 // --- Rotas de Produtos ---
 app.get('/produtos', async (req, res) => {
     try {
@@ -300,6 +312,30 @@ app.get('/categorias/produtos', async (req, res) => {
         return res.status(200).json(categorias);
     } catch (error) {
         console.error('ERRO AO BUSCAR CATEGORIAS:', error);
+        return res.status(500).json({ error: 'Erro ao buscar categorias.' });
+    }
+});
+
+// --- Filtros de Produtos (loja do aluno) ---
+app.get('/produtos/filtrados', async (req, res) => {
+    try {
+        const { categoria, busca } = req.query;
+        const { puxarProdutosFiltrados } = await import('./services/produtosServices.js');
+        const produtos = await puxarProdutosFiltrados({ categoria, busca });
+        return res.status(200).json(produtos);
+    } catch (error) {
+        console.error('ERRO AO BUSCAR PRODUTOS FILTRADOS:', error);
+        return res.status(500).json({ error: 'Erro ao buscar produtos.' });
+    }
+});
+
+app.get('/categorias/filtro', async (req, res) => {
+    try {
+        const { puxarCategoriasParaFiltro } = await import('./services/produtosServices.js');
+        const categorias = await puxarCategoriasParaFiltro();
+        return res.status(200).json(categorias);
+    } catch (error) {
+        console.error('ERRO AO BUSCAR CATEGORIAS PARA FILTRO:', error);
         return res.status(500).json({ error: 'Erro ao buscar categorias.' });
     }
 });
@@ -385,6 +421,35 @@ app.post('/aluno/comprar', async (req, res) => {
         }
         console.error('ERRO AO REALIZAR PEDIDO:', error);
         return res.status(500).json({ error: 'Erro ao processar pedido.' });
+    }
+});
+
+// --- Carrinho do Aluno (compra múltipla) ---
+app.post('/aluno/comprar-carrinho', async (req, res) => {
+    try {
+        const { aluno_id, produtos } = req.body;
+        if (!aluno_id || !Array.isArray(produtos) || produtos.length === 0) {
+            return res.status(400).json({ error: 'Dados inválidos.' });
+        }
+        const { processarCarrinho } = await import('./services/carrinhoServices.js');
+        const resultado = await processarCarrinho(aluno_id, produtos.map(p => p.id));
+        if (resultado.erros.length > 0 && resultado.comprados.length === 0) {
+            return res.status(400).json({ error: resultado.erros[0].erro, erros: resultado.erros });
+        }
+        return res.status(200).json({
+            comprados: resultado.comprados,
+            erros: resultado.erros,
+            saldo_restante: resultado.saldo_restante
+        });
+    } catch (e) {
+        console.error('ERRO AO PROCESSAR CARRINHO:', e);
+        if (e.message === 'BLOQUEADO_PELO_RESPONSAVEL') {
+            return res.status(403).json({ error: 'Compras bloqueadas pelo responsável.' });
+        }
+        if (e.message === 'OCORRENCIAS_PENDENTES') {
+            return res.status(403).json({ error: 'Você tem ocorrências pendentes de consentimento.' });
+        }
+        return res.status(500).json({ error: 'Erro ao processar carrinho.' });
     }
 });
 
@@ -630,6 +695,115 @@ app.patch('/admin/compras/:id/entregar', async (req, res) => {
     } catch (error) {
         console.error('ERRO AO CONFIRMAR ENTREGA:', error);
         return res.status(500).json({ error: 'Erro ao confirmar entrega.' });
+    }
+});
+
+// --- Histórico de Vendas (7 dias) ---
+app.get('/admin/historico-vendas', async (req, res) => {
+    try {
+        const { puxarHistoricoVendas } = await import('./services/comprasServices.js');
+        const historico = await puxarHistoricoVendas();
+        return res.status(200).json(historico);
+    } catch (error) {
+        console.error('ERRO AO BUSCAR HISTÓRICO:', error);
+        return res.status(500).json({ error: 'Erro ao buscar histórico de vendas.' });
+    }
+});
+
+app.delete('/admin/historico-vendas/limpar', async (req, res) => {
+    try {
+        const { limparHistoricoAntigo } = await import('./services/comprasServices.js');
+        const removidos = await limparHistoricoAntigo();
+        return res.status(200).json({ message: `Histórico limpo. ${removidos} registros removidos.`, removidos });
+    } catch (error) {
+        console.error('ERRO AO LIMPAR HISTÓRICO:', error);
+        return res.status(500).json({ error: 'Erro ao limpar histórico de vendas.' });
+    }
+});
+
+// --- Filtrar Compras Pendentes ---
+app.get('/admin/entregas-pendentes', async (req, res) => {
+    try {
+        const { puxarTodasCompras } = await import('./services/comprasServices.js');
+        let compras = await puxarTodasCompras();
+        // Só pendentes
+        compras = compras.filter(c => !c.entregue);
+
+        const { produto } = req.query;
+        const { categoria } = req.query;
+        const { turma_id } = req.query;
+
+        if (produto) {
+            compras = compras.filter(c => c.produto_nome.toLowerCase().includes(produto.toLowerCase()));
+        }
+        if (categoria) {
+            compras = compras.filter(c => c.categoria_nome && c.categoria_nome.toLowerCase().includes(categoria.toLowerCase()));
+        }
+        if (turma_id) {
+            compras = compras.filter(c => c.turma_id == turma_id);
+        }
+
+        return res.status(200).json(compras);
+    } catch (error) {
+        console.error('ERRO AO BUSCAR ENTREGAS PENDENTES:', error);
+        return res.status(500).json({ error: 'Erro ao buscar entregas.' });
+    }
+});
+
+app.get('/admin/entregas-pendentes/produtos', async (req, res) => {
+    try {
+        const connection = await mysql.createConnection(dbConfig);
+        const [rows] = await connection.execute(`
+            SELECT DISTINCT p.id, p.nome AS produto_nome, p.custo_pontos, cat.nome AS categoria_nome
+            FROM compras c
+            JOIN produtos p ON c.produto_id = p.id
+            LEFT JOIN categorias cat ON p.categoria_id = cat.id
+            WHERE c.entregue = 0
+            ORDER BY p.nome
+        `);
+        await connection.end();
+        return res.status(200).json(rows);
+    } catch (error) {
+        console.error('ERRO AO BUSCAR PRODUTOS PARA FILTRO:', error);
+        return res.status(500).json({ error: 'Erro ao buscar produtos.' });
+    }
+});
+
+app.get('/admin/entregas-pendentes/categorias', async (req, res) => {
+    try {
+        const connection = await mysql.createConnection(dbConfig);
+        const [rows] = await connection.execute(`
+            SELECT DISTINCT cat.id, cat.nome AS categoria_nome
+            FROM compras c
+            JOIN produtos p ON c.produto_id = p.id
+            JOIN categorias cat ON p.categoria_id = cat.id
+            WHERE c.entregue = 0
+            ORDER BY cat.nome
+        `);
+        await connection.end();
+        return res.status(200).json(rows);
+    } catch (error) {
+        console.error('ERRO AO BUSCAR CATEGORIAS PARA FILTRO:', error);
+        return res.status(500).json({ error: 'Erro ao buscar categorias.' });
+    }
+});
+
+app.get('/admin/entregas-pendentes/turmas', async (req, res) => {
+    try {
+        const connection = await mysql.createConnection(dbConfig);
+        const [rows] = await connection.execute(`
+            SELECT DISTINCT t.id, CONCAT(t.serie, t.turma) AS turma_nome
+            FROM compras c
+            JOIN alunos a ON c.aluno_id = a.id
+            JOIN turmas t ON a.turma_id = t.id
+            WHERE c.entregue = 0
+            ORDER BY CONCAT(t.serie, t.turma)
+        `);
+        await connection.end();
+        return res.status(200).json(rows);
+    } catch (error) {
+        console.error('ERRO AO BUSCAR TURMAS PARA FILTRO:', error);
+        return res.status(500).json({ error: 'Erro ao buscar turmas.' });
     }
 });
 
