@@ -74,7 +74,6 @@ export default function Header(links = {}) {
                 `}
             </div>
         </header>
-        <div id="sidebar-overlay" class="polocoin-sidebar-overlay" onclick="toggleSidebar()"></div>
     `;
 }
 
