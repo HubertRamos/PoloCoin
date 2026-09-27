@@ -24,8 +24,8 @@ function getCor(nome) {
 }
 
 function formatarPreco(valor) {
-    if (valor == null) return 'R$ 0,00'
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(valor))
+    if (valor == null) return '0 🪙'
+    return `${parseInt(valor, 10) || 0} 🪙`
 }
 
 function formatarData(dateStr) {
@@ -159,7 +159,7 @@ function abrirModalAdd() {
                 'Novo Produto',
                 [
                     { label: 'Nome do Produto', placeholder: 'Ex: Chocolate Amargo 50g', type: 'text', id: 'prod-nome', required: true },
-                    { label: 'Preço (R$)', placeholder: '0,00', type: 'number', id: 'prod-preco', required: true },
+                    { label: 'Custo em PoloCoins (🪙)', placeholder: 'Ex: 50', type: 'number', id: 'prod-preco', required: true },
                 ],
                 categoriaOptions
             )}
@@ -198,8 +198,8 @@ function abrirModalAdd() {
             const catSelect = document.getElementById('categoria-select')
             let categoria = catSelect ? catSelect.value : ''
 
-            if (!nome || !preco || preco <= 0) {
-                msg.textContent = 'Preencha nome e preço corretamente.'
+            if (!nome || isNaN(preco) || preco <= 0) {
+                msg.textContent = 'Preencha nome e custo em moedas corretamente.'
                 msg.style.color = '#ef4444'
                 return
             }
@@ -208,10 +208,16 @@ function abrirModalAdd() {
             msg.style.color = '#3b82f6'
 
             try {
+                const custoPontosInt = Math.round(preco)
                 const resposta = await fetch('/produtos', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nome, preco, categoria }),
+                    body: JSON.stringify({
+                        nome,
+                        custo_pontos: custoPontosInt,
+                        preco: custoPontosInt,
+                        categoria
+                    }),
                 })
 
                 const dados = await resposta.json()

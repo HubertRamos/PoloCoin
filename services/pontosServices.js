@@ -1,25 +1,25 @@
-import mysql from 'mysql2/promise';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
+import { supabase } from '../config/supabase.js';
 
 /**
  * Retorna o saldo atual de pontos de um aluno.
  */
 export async function getSaldoPontos(alunoId) {
-    const connection = await mysql.createConnection(dbConfig);
+    if (!alunoId) return 0;
     try {
-        const [rows] = await connection.execute(
-            'SELECT pontos FROM alunos WHERE id = ?',
-            [alunoId]
-        );
-        return rows.length > 0 ? rows[0].pontos : 0;
-    } finally {
-        await connection.end();
+        const { data, error } = await supabase
+            .from('alunos')
+            .select('pontos')
+            .eq('id', Number(alunoId))
+            .maybeSingle();
+
+        if (error) {
+            console.error('Erro ao buscar saldo de pontos:', error.message);
+            return 0;
+        }
+        if (!data) return 0;
+        return data.pontos ?? 0;
+    } catch {
+        return 0;
     }
 }
 
@@ -27,53 +27,59 @@ export async function getSaldoPontos(alunoId) {
  * Adiciona pontos à conta do aluno (ex: avaliação positiva).
  */
 export async function creditarPontos(alunoId, quantidade) {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        await connection.execute(
-            'UPDATE alunos SET pontos = pontos + ? WHERE id = ?',
-            [quantidade, alunoId]
-        );
-        const [rows] = await connection.execute(
-            'SELECT pontos FROM alunos WHERE id = ?',
-            [alunoId]
-        );
-        return rows.length > 0 ? rows[0].pontos : 0;
-    } finally {
-        await connection.end();
+    const idNum = Number(alunoId);
+    const qtdNum = Number(quantidade) || 0;
+
+    const saldoAtual = await getSaldoPontos(idNum);
+    const novoSaldo = (Number(saldoAtual) || 0) + qtdNum;
+
+    const { error } = await supabase
+        .from('alunos')
+        .update({ pontos: novoSaldo })
+        .eq('id', idNum);
+
+    if (error) {
+        throw new Error(error.message);
     }
+    return novoSaldo;
 }
 
 /**
  * Remove pontos da conta do aluno (ex: compra).
  * Retorna o novo saldo.
- * Lança erro se saldo insuficiente.
+ * Lança erro se saldo insuficiente ou aluno não encontrado.
  */
 export async function deduzirPontos(alunoId, quantidade) {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute(
-            'SELECT pontos FROM alunos WHERE id = ?',
-            [alunoId]
-        );
-        if (rows.length === 0) {
-            throw new Error('ALUNO_NAO_ENCONTRADO');
-        }
-        const saldo = rows[0].pontos;
-        if (saldo < quantidade) {
-            throw new Error('SALDO_INSUFICIENTE');
-        }
+    const idNum = Number(alunoId);
+    const qtdNum = Number(quantidade) || 0;
 
-        await connection.execute(
-            'UPDATE alunos SET pontos = pontos - ? WHERE id = ?',
-            [quantidade, alunoId]
-        );
+    const { data: aluno, error } = await supabase
+        .from('alunos')
+        .select('pontos')
+        .eq('id', idNum)
+        .maybeSingle();
 
-        const [novo] = await connection.execute(
-            'SELECT pontos FROM alunos WHERE id = ?',
-            [alunoId]
-        );
-        return novo.length > 0 ? novo[0].pontos : 0;
-    } finally {
-        await connection.end();
+    if (error) {
+        throw new Error(error.message);
     }
+    if (!aluno) {
+        throw new Error('ALUNO_NAO_ENCONTRADO');
+    }
+
+    const saldo = aluno.pontos ?? 0;
+    if (saldo < qtdNum) {
+        throw new Error('SALDO_INSUFICIENTE');
+    }
+
+    const novoSaldo = saldo - qtdNum;
+
+    const { error: errUpdate } = await supabase
+        .from('alunos')
+        .update({ pontos: novoSaldo })
+        .eq('id', idNum);
+
+    if (errUpdate) {
+        throw new Error(errUpdate.message);
+    }
+    return novoSaldo;
 }

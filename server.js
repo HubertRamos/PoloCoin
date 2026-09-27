@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import mysql from 'mysql2/promise';
+import { supabase } from './config/supabase.js';
 import { criarProfessor, puxarProfessores } from './services/professoresServices.js';
 import { criarTurma, puxarTurmas } from './services/turmasServices.js';
 import { criarAlunoComResponsavel, puxarAlunosPorTurma, puxarAvaliacoesDoAluno, atualizarSenhaAluno } from './services/alunosServices.js';
@@ -14,13 +14,6 @@ import { getSaldoPontos, deduzirPontos } from './services/pontosServices.js';
 import { puxarTodosProdutos, criarProduto, puxarTodasCategorias, garantirCategoriasBasicas, criarCategoriaSeNecesaria } from './services/produtosServices.js';
 import { adicionarDesejo, processarDesejoComoCompra, puxarDesejosDoAluno } from './services/desejosServices.js';
 import { getFilhosComSaldos, getDesejosDosFilhos } from './services/responsavelDesejosServices.js';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
 
 const app = express();
 app.use(cors());
@@ -289,13 +282,17 @@ app.get('/produtos', async (req, res) => {
 });
 
 app.post('/produtos', async (req, res) => {
-    const { nome, custo_pontos, categoria } = req.body;
+    const { nome, custo_pontos, preco, categoria } = req.body;
+    const pontosValor = custo_pontos !== undefined && custo_pontos !== null && custo_pontos !== ''
+        ? custo_pontos
+        : preco;
+
     try {
         let categoria_id = null;
         if (categoria) {
             categoria_id = await criarCategoriaSeNecesaria(categoria);
         }
-        const produto = await criarProduto(nome, custo_pontos, categoria_id);
+        const produto = await criarProduto(nome, pontosValor, categoria_id);
         return res.status(201).json({ message: 'Produto cadastrado com sucesso!', produto });
     } catch (error) {
         console.error('ERRO AO CRIAR PRODUTO:', error);
@@ -361,60 +358,83 @@ app.post('/aluno/comprar', async (req, res) => {
         return res.status(400).json({ error: 'Dados incompletos.' });
     }
     try {
-        const connection = await mysql.createConnection(dbConfig);
-        try {
-            // Verifica se o aluno pode comprar (liberado + sem ocorrências pendentes)
-            const [aluno] = await connection.execute(
-                'SELECT pode_comprar FROM alunos WHERE id = ?',
-                [aluno_id]
-            );
-            if (aluno.length === 0) {
-                return res.status(404).json({ error: 'Aluno não encontrado.' });
-            }
-            const podeComprar = aluno[0].pode_comprar === 1 || aluno[0].pode_comprar === true;
+        const alunoIdNum = Number(aluno_id);
+        const prodIdNum = Number(produto_id);
 
-            if (!podeComprar) {
-                return res.status(403).json({ error: 'Compras bloqueadas pelo responsável. Adicione o produto aos desejos.' });
-            }
+        // Verifica se o aluno pode comprar (liberado + sem ocorrências pendentes)
+        const { data: aluno, error: errAluno } = await supabase
+            .from('alunos')
+            .select('pode_comprar')
+            .eq('id', alunoIdNum)
+            .maybeSingle();
 
-            // Verifica ocorrências não consentidas
-            const [ocorrenciasNaoConsentidas] = await connection.execute(
-                `SELECT COUNT(*) as total FROM avaliacoes av
-                 JOIN alunos a ON av.aluno_id = a.id
-                 JOIN responsaveis r ON a.responsavel_id = r.id
-                 WHERE a.id = ? AND av.consentido = 0
-                 AND (av.pontos <= 10 OR av.valor IN ('bagunça','desmotivado','não entregou','conflituante','isolado','desinteressado','indiferente','atrasado'))`,
-                [aluno_id]
-            );
-            if (ocorrenciasNaoConsentidas[0].total > 0) {
-                return res.status(403).json({ error: 'Você tem ocorrências pendentes de consentimento do seu responsável. Não é possível realizar compras enquanto elas não forem resolvidas.' });
-            }
-
-            const [produtos] = await connection.execute(
-                'SELECT id, nome, custo_pontos FROM produtos WHERE id = ?',
-                [produto_id]
-            );
-            if (produtos.length === 0) {
-                return res.status(404).json({ error: 'Produto não encontrado.' });
-            }
-            const produto = produtos[0];
-
-            const novoSaldo = await deduzirPontos(aluno_id, produto.custo_pontos);
-
-            // Registra a compra na tabela de compras
-            await connection.execute(
-                'INSERT INTO compras (aluno_id, produto_id, custo_pontos, autorizado_por) VALUES (?, ?, ?, ?)',
-                [aluno_id, produto_id, produto.custo_pontos, null]
-            );
-
-            return res.status(200).json({
-                message: 'Pedido realizado com sucesso!',
-                produto: { nome: produto.nome, custo_pontos: produto.custo_pontos },
-                saldo_restante: novoSaldo
-            });
-        } finally {
-            await connection.end();
+        if (errAluno) {
+            throw new Error(errAluno.message);
         }
+        if (!aluno) {
+            return res.status(404).json({ error: 'Aluno não encontrado.' });
+        }
+
+        const podeComprar = aluno.pode_comprar === true || aluno.pode_comprar === 1;
+        if (!podeComprar) {
+            return res.status(403).json({ error: 'Compras bloqueadas pelo responsável. Adicione o produto aos desejos.' });
+        }
+
+        // Verifica ocorrências não consentidas
+        const valoresNegativos = ['bagunça','desmotivado','não entregou','conflituante','isolado','desinteressado','indiferente','atrasado'];
+        const { data: ocorrencias, error: errOc } = await supabase
+            .from('avaliacoes')
+            .select('id, pontos, valor')
+            .eq('aluno_id', alunoIdNum)
+            .eq('consentido', false);
+
+        if (errOc) {
+            throw new Error(errOc.message);
+        }
+
+        const temOcorrencias = (ocorrencias || []).some(
+            av => (av.pontos !== null && av.pontos <= 10) || valoresNegativos.includes(av.valor)
+        );
+
+        if (temOcorrencias) {
+            return res.status(403).json({ error: 'Você tem ocorrências pendentes de consentimento do seu responsável. Não é possível realizar compras enquanto elas não forem resolvidas.' });
+        }
+
+        const { data: produto, error: errProd } = await supabase
+            .from('produtos')
+            .select('id, nome, custo_pontos')
+            .eq('id', prodIdNum)
+            .maybeSingle();
+
+        if (errProd) {
+            throw new Error(errProd.message);
+        }
+        if (!produto) {
+            return res.status(404).json({ error: 'Produto não encontrado.' });
+        }
+
+        const novoSaldo = await deduzirPontos(alunoIdNum, produto.custo_pontos);
+
+        // Registra a compra na tabela de compras (entregue: false)
+        const { error: errCompra } = await supabase
+            .from('compras')
+            .insert([{
+                aluno_id: alunoIdNum,
+                produto_id: prodIdNum,
+                custo_pontos: produto.custo_pontos,
+                autorizado_por: null,
+                entregue: false
+            }]);
+
+        if (errCompra) {
+            throw new Error(errCompra.message);
+        }
+
+        return res.status(200).json({
+            message: 'Pedido realizado com sucesso!',
+            produto: { nome: produto.nome, custo_pontos: produto.custo_pontos },
+            saldo_restante: novoSaldo
+        });
     } catch (error) {
         if (error.message === 'SALDO_INSUFICIENTE') {
             return res.status(400).json({ error: 'Saldo insuficiente para esta compra.' });
@@ -475,35 +495,46 @@ app.get('/aluno/pode-comprar', async (req, res) => {
         return res.status(400).json({ error: 'ID do aluno é obrigatório.' });
     }
     try {
-        const connection = await mysql.createConnection(dbConfig);
-        try {
-            const [aluno] = await connection.execute(
-                'SELECT pode_comprar FROM alunos WHERE id = ?',
-                [id]
-            );
-            if (aluno.length === 0) {
-                return res.status(404).json({ error: 'Aluno não encontrado.' });
-            }
-            const liberado = aluno[0].pode_comprar === 1 || aluno[0].pode_comprar === true;
+        const alunoIdNum = Number(id);
+        const { data: aluno, error: errAluno } = await supabase
+            .from('alunos')
+            .select('pode_comprar')
+            .eq('id', alunoIdNum)
+            .maybeSingle();
 
-            const [ocorrenciasNaoConsentidas] = await connection.execute(
-                `SELECT COUNT(*) as total FROM avaliacoes av
-                 JOIN alunos a ON av.aluno_id = a.id
-                 JOIN responsaveis r ON a.responsavel_id = r.id
-                 WHERE a.id = ? AND av.consentido = 0
-                 AND (av.pontos <= 10 OR av.valor IN ('bagunça','desmotivado','não entregou','conflituante','isolado','desinteressado','indiferente','atrasado'))`,
-                [id]
-            );
-            const temPendente = (ocorrenciasNaoConsentidas[0].total > 0);
-
-            return res.status(200).json({
-                pode_comprar: liberado && !temPendente,
-                liberado_pelo_pai: liberado,
-                tem_ocorrencia_pendente: temPendente
-            });
-        } finally {
-            await connection.end();
+        if (errAluno) {
+            throw new Error(errAluno.message);
         }
+        if (!aluno) {
+            return res.status(404).json({ error: 'Aluno não encontrado.' });
+        }
+
+        const liberado = aluno.pode_comprar === true || aluno.pode_comprar === 1;
+
+        const valoresNegativos = [
+            'bagunça', 'desmotivado', 'não entregou', 'conflituante',
+            'isolado', 'desinteressado', 'indiferente', 'atrasado'
+        ];
+
+        const { data: ocorrencias, error: errOc } = await supabase
+            .from('avaliacoes')
+            .select('id, pontos, valor')
+            .eq('aluno_id', alunoIdNum)
+            .eq('consentido', false);
+
+        if (errOc) {
+            throw new Error(errOc.message);
+        }
+
+        const temPendente = (ocorrencias || []).some(
+            av => (av.pontos !== null && av.pontos <= 10) || valoresNegativos.includes(av.valor)
+        );
+
+        return res.status(200).json({
+            pode_comprar: liberado && !temPendente,
+            liberado_pelo_pai: liberado,
+            tem_ocorrencia_pendente: temPendente
+        });
     } catch (error) {
         console.error('ERRO AO VERIFICAR PERMISSÃO:', error);
         return res.status(500).json({ error: 'Erro ao verificar permissão.' });
@@ -517,26 +548,32 @@ app.post('/aluno/desejos', async (req, res) => {
         return res.status(400).json({ error: 'Dados incompletos.' });
     }
     try {
-        const connection = await mysql.createConnection(dbConfig);
-        try {
-            // Verifica se tem ocorrências não consentidas
-            const [ocorrenciasNaoConsentidas] = await connection.execute(
-                `SELECT COUNT(*) as total FROM avaliacoes av
-                 JOIN alunos a ON av.aluno_id = a.id
-                 JOIN responsaveis r ON a.responsavel_id = r.id
-                 WHERE a.id = ? AND av.consentido = 0
-                 AND (av.pontos <= 10 OR av.valor IN ('bagunça','desmotivado','não entregou','conflituante','isolado','desinteressado','indiferente','atrasado'))`,
-                [aluno_id]
-            );
-            if (ocorrenciasNaoConsentidas[0].total > 0) {
-                return res.status(403).json({ error: 'Você tem ocorrências pendentes de consentimento. Resolva primeiro antes de adicionar desejos.' });
-            }
+        const alunoIdNum = Number(aluno_id);
+        const valoresNegativos = [
+            'bagunça', 'desmotivado', 'não entregou', 'conflituante',
+            'isolado', 'desinteressado', 'indiferente', 'atrasado'
+        ];
 
-            const resultado = await adicionarDesejo(aluno_id, produto_id);
-            return res.status(201).json({ message: 'Desejo adicionado! O responsável será notificado.', desejo: resultado });
-        } finally {
-            await connection.end();
+        const { data: ocorrencias, error: errOc } = await supabase
+            .from('avaliacoes')
+            .select('id, pontos, valor')
+            .eq('aluno_id', alunoIdNum)
+            .eq('consentido', false);
+
+        if (errOc) {
+            throw new Error(errOc.message);
         }
+
+        const temPendente = (ocorrencias || []).some(
+            av => (av.pontos !== null && av.pontos <= 10) || valoresNegativos.includes(av.valor)
+        );
+
+        if (temPendente) {
+            return res.status(403).json({ error: 'Você tem ocorrências pendentes de consentimento. Resolva primeiro antes de adicionar desejos.' });
+        }
+
+        const resultado = await adicionarDesejo(aluno_id, produto_id);
+        return res.status(201).json({ message: 'Desejo adicionado! O responsável será notificado.', desejo: resultado });
     } catch (error) {
         if (error.message === 'DESEJO_EXISTENTE') {
             return res.status(400).json({ error: 'Este produto já está na sua lista de desejos.' });
@@ -615,16 +652,16 @@ app.patch('/aluno/pode-comprar', async (req, res) => {
         return res.status(400).json({ error: 'ID do aluno é obrigatório.' });
     }
     try {
-        const connection = await mysql.createConnection(dbConfig);
-        try {
-            await connection.execute(
-                'UPDATE alunos SET pode_comprar = ? WHERE id = ?',
-                [pode_comprar ? 1 : 0, aluno_id]
-            );
-            return res.status(200).json({ message: 'Permissão atualizada com sucesso!', pode_comprar });
-        } finally {
-            await connection.end();
+        const podeComprarBool = pode_comprar === true || pode_comprar === 1 || pode_comprar === '1' || pode_comprar === 'true';
+        const { error } = await supabase
+            .from('alunos')
+            .update({ pode_comprar: podeComprarBool })
+            .eq('id', Number(aluno_id));
+
+        if (error) {
+            throw new Error(error.message);
         }
+        return res.status(200).json({ message: 'Permissão atualizada com sucesso!', pode_comprar: podeComprarBool });
     } catch (error) {
         console.error('ERRO AO ATUALIZAR PERMISSÃO:', error);
         return res.status(500).json({ error: 'Erro ao atualizar permissão.' });
@@ -752,16 +789,40 @@ app.get('/admin/entregas-pendentes', async (req, res) => {
 
 app.get('/admin/entregas-pendentes/produtos', async (req, res) => {
     try {
-        const connection = await mysql.createConnection(dbConfig);
-        const [rows] = await connection.execute(`
-            SELECT DISTINCT p.id, p.nome AS produto_nome, p.custo_pontos, cat.nome AS categoria_nome
-            FROM compras c
-            JOIN produtos p ON c.produto_id = p.id
-            LEFT JOIN categorias cat ON p.categoria_id = cat.id
-            WHERE c.entregue = 0
-            ORDER BY p.nome
-        `);
-        await connection.end();
+        const { data, error } = await supabase
+            .from('compras')
+            .select(`
+                produto_id,
+                produtos (
+                    id,
+                    nome,
+                    custo_pontos,
+                    categorias (
+                        nome
+                    )
+                )
+            `)
+            .eq('entregue', false);
+
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        const produtosMap = new Map();
+        for (const item of (data || [])) {
+            const prod = Array.isArray(item.produtos) ? item.produtos[0] : item.produtos;
+            if (prod && !produtosMap.has(prod.id)) {
+                const cat = prod.categorias ? (Array.isArray(prod.categorias) ? prod.categorias[0] : prod.categorias) : null;
+                produtosMap.set(prod.id, {
+                    id: prod.id,
+                    produto_nome: prod.nome,
+                    custo_pontos: prod.custo_pontos,
+                    categoria_nome: cat?.nome ?? null
+                });
+            }
+        }
+
+        const rows = Array.from(produtosMap.values()).sort((a, b) => a.produto_nome.localeCompare(b.produto_nome));
         return res.status(200).json(rows);
     } catch (error) {
         console.error('ERRO AO BUSCAR PRODUTOS PARA FILTRO:', error);
@@ -771,16 +832,36 @@ app.get('/admin/entregas-pendentes/produtos', async (req, res) => {
 
 app.get('/admin/entregas-pendentes/categorias', async (req, res) => {
     try {
-        const connection = await mysql.createConnection(dbConfig);
-        const [rows] = await connection.execute(`
-            SELECT DISTINCT cat.id, cat.nome AS categoria_nome
-            FROM compras c
-            JOIN produtos p ON c.produto_id = p.id
-            JOIN categorias cat ON p.categoria_id = cat.id
-            WHERE c.entregue = 0
-            ORDER BY cat.nome
-        `);
-        await connection.end();
+        const { data, error } = await supabase
+            .from('compras')
+            .select(`
+                produtos (
+                    categoria_id,
+                    categorias (
+                        id,
+                        nome
+                    )
+                )
+            `)
+            .eq('entregue', false);
+
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        const categoriasMap = new Map();
+        for (const item of (data || [])) {
+            const prod = Array.isArray(item.produtos) ? item.produtos[0] : item.produtos;
+            const cat = prod?.categorias ? (Array.isArray(prod.categorias) ? prod.categorias[0] : prod.categorias) : null;
+            if (cat && !categoriasMap.has(cat.id)) {
+                categoriasMap.set(cat.id, {
+                    id: cat.id,
+                    categoria_nome: cat.nome
+                });
+            }
+        }
+
+        const rows = Array.from(categoriasMap.values()).sort((a, b) => a.categoria_nome.localeCompare(b.categoria_nome));
         return res.status(200).json(rows);
     } catch (error) {
         console.error('ERRO AO BUSCAR CATEGORIAS PARA FILTRO:', error);
@@ -790,16 +871,36 @@ app.get('/admin/entregas-pendentes/categorias', async (req, res) => {
 
 app.get('/admin/entregas-pendentes/turmas', async (req, res) => {
     try {
-        const connection = await mysql.createConnection(dbConfig);
-        const [rows] = await connection.execute(`
-            SELECT DISTINCT t.id, CONCAT(t.serie, t.turma) AS turma_nome
-            FROM compras c
-            JOIN alunos a ON c.aluno_id = a.id
-            JOIN turmas t ON a.turma_id = t.id
-            WHERE c.entregue = 0
-            ORDER BY CONCAT(t.serie, t.turma)
-        `);
-        await connection.end();
+        const { data, error } = await supabase
+            .from('compras')
+            .select(`
+                alunos (
+                    turmas (
+                        id,
+                        serie,
+                        turma
+                    )
+                )
+            `)
+            .eq('entregue', false);
+
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        const turmasMap = new Map();
+        for (const item of (data || [])) {
+            const aluno = Array.isArray(item.alunos) ? item.alunos[0] : item.alunos;
+            const turma = aluno?.turmas ? (Array.isArray(aluno.turmas) ? aluno.turmas[0] : aluno.turmas) : null;
+            if (turma && !turmasMap.has(turma.id)) {
+                turmasMap.set(turma.id, {
+                    id: turma.id,
+                    turma_nome: `${turma.serie}${turma.turma}`
+                });
+            }
+        }
+
+        const rows = Array.from(turmasMap.values()).sort((a, b) => a.turma_nome.localeCompare(b.turma_nome));
         return res.status(200).json(rows);
     } catch (error) {
         console.error('ERRO AO BUSCAR TURMAS PARA FILTRO:', error);
@@ -808,13 +909,13 @@ app.get('/admin/entregas-pendentes/turmas', async (req, res) => {
 });
 
 // Inicialização segura do servidor
-const PORT = 3333;
+const PORT = 3000;
 garantirCategoriasBasicas()
-    .then(() => {
-        app.listen(PORT, () => {
+    .catch((err) => {
+        console.warn('Aviso: Verifique conexão com Supabase (SUPABASE_URL e SUPABASE_KEY):', err.message);
+    })
+    .finally(() => {
+        app.listen(PORT, '0.0.0.0', () => {
             console.log(`Servidor ativo na porta ${PORT}`);
         });
-    })
-    .catch((err) => {
-        console.error('Erro ao inicializar base de dados:', err);
     });

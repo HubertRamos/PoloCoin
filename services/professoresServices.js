@@ -1,14 +1,6 @@
-import mysql from 'mysql2/promise';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
+import { supabase } from '../config/supabase.js';
 
 export async function criarProfessor(name, password) {
-    // Remove espaços excedentes do começo e do fim
     const nomeLimpo = name ? name.trim() : '';
     const senhaLimpa = password ? password.trim() : '';
 
@@ -16,34 +8,41 @@ export async function criarProfessor(name, password) {
         throw new Error('CAMPOS_VAZIOS');
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        // Verifica se o professor já existe no banco
-        const [existente] = await connection.execute(
-            'SELECT id FROM professores WHERE name = ?', 
-            [nomeLimpo]
-        );
+    // Verifica se o professor já existe no banco
+    const { data: existente, error: errExist } = await supabase
+        .from('professores')
+        .select('id')
+        .eq('name', nomeLimpo)
+        .maybeSingle();
 
-        if (existente.length > 0) {
+    if (errExist) {
+        throw new Error(errExist.message);
+    }
+
+    if (existente) {
+        throw new Error('DUPLICADO');
+    }
+
+    // Insere se não existir
+    const { error: errInsert } = await supabase
+        .from('professores')
+        .insert([{ name: nomeLimpo, password: senhaLimpa }]);
+
+    if (errInsert) {
+        if (errInsert.code === '23505') {
             throw new Error('DUPLICADO');
         }
-
-        // Insere se não existir
-        const sql = 'INSERT INTO professores (name, password) VALUES (?, ?)';
-        await connection.execute(sql, [nomeLimpo, senhaLimpa]);
-    } finally {
-        await connection.end();
+        throw new Error(errInsert.message);
     }
 }
 
-
-
 export async function puxarProfessores() {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute('SELECT id, name FROM professores');
-        return rows;
-    } finally {
-        await connection.end();
+    const { data, error } = await supabase
+        .from('professores')
+        .select('id, name');
+
+    if (error) {
+        throw new Error(error.message);
     }
+    return data || [];
 }

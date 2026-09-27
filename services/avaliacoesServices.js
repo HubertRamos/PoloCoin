@@ -1,17 +1,10 @@
-import mysql from 'mysql2/promise';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
-
+import { supabase } from '../config/supabase.js';
 import { creditarPontos } from './pontosServices.js';
 
 /**
  * Cria uma nova avaliação para um aluno.
  * Se os pontos forem positivos, credita automaticamente na conta do aluno.
+ * 'consentido' é explicitamente inicializado como false (booleano).
  */
 export async function criarAvaliacao(alunoId, professorId, categoria, valor, pontos = 0, observacao = '') {
     if (!alunoId || !professorId || !categoria || !valor) {
@@ -26,23 +19,38 @@ export async function criarAvaliacao(alunoId, professorId, categoria, valor, pon
         throw new Error('CAMPOS_VAZIOS');
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [result] = await connection.execute(
-            `INSERT INTO avaliacoes (aluno_id, professor_id, categoria, valor, pontos, observacao)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [alunoIdNum, professorIdNum, categoria, valor, pontosNum, observacao || null]
-        );
+    const { data, error } = await supabase
+        .from('avaliacoes')
+        .insert([{
+            aluno_id: alunoIdNum,
+            professor_id: professorIdNum,
+            categoria,
+            valor,
+            pontos: pontosNum,
+            observacao: observacao || null,
+            consentido: false
+        }])
+        .select('id')
+        .single();
 
-        // Se pontos positivos, credita automaticamente na conta do aluno
-        if (pontosNum > 0) {
-            await creditarPontos(alunoIdNum, pontosNum);
-        }
-
-        return { id: result.insertId, aluno_id: alunoIdNum, professor_id: professorIdNum, categoria, valor, pontos: pontosNum, observacao: observacao || null };
-    } finally {
-        await connection.end();
+    if (error) {
+        throw new Error(error.message);
     }
+
+    // Se pontos positivos, credita automaticamente na conta do aluno
+    if (pontosNum > 0) {
+        await creditarPontos(alunoIdNum, pontosNum);
+    }
+
+    return {
+        id: data.id,
+        aluno_id: alunoIdNum,
+        professor_id: professorIdNum,
+        categoria,
+        valor,
+        pontos: pontosNum,
+        observacao: observacao || null
+    };
 }
 
 /**
@@ -53,56 +61,34 @@ export async function puxarAvaliacoesPorAluno(alunoId, professorId = null) {
         throw new Error('CAMPOS_VAZIOS');
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        let query = `
-            SELECT id, professor_id, categoria, valor, pontos, observacao, DATE(criado_em) AS data, TIME(criado_em) AS hora
-            FROM avaliacoes
-            WHERE aluno_id = ?
-        `;
-        const params = [Number(alunoId)];
+    let query = supabase
+        .from('avaliacoes')
+        .select('id, professor_id, categoria, valor, pontos, observacao, criado_em')
+        .eq('aluno_id', Number(alunoId));
 
-        if (professorId) {
-            query += ` AND professor_id = ?`;
-            params.push(Number(professorId));
-        }
-
-        query += ` ORDER BY criado_em DESC`;
-
-        const [rows] = await connection.execute(query, params);
-        return rows;
-    } finally {
-        await connection.end();
-    }
-}
-
-/**
- * Puxa todas as avaliações de uma turma, com nome dos alunos.
- * Usada pelo painel "Ocorrencias da Turma" do professor.
- */
-export async function puxarAvaliacoesPorTurma(turmaId) {
-    if (!turmaId) {
-        throw new Error('CAMPOS_VAZIOS');
+    if (professorId) {
+        query = query.eq('professor_id', Number(professorId));
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const query = `
-            SELECT a.id, a.aluno_id, a.professor_id, a.categoria, a.valor, a.pontos, a.observacao,
-                   DATE(a.criado_em) AS data, TIME(a.criado_em) AS hora,
-                   al.nome AS aluno_nome,
-                   p.name AS professor_nome
-            FROM avaliacoes a
-            JOIN alunos al ON a.aluno_id = al.id
-            JOIN professores p ON a.professor_id = p.id
-            WHERE al.turma_id = ?
-            ORDER BY a.criado_em DESC
-        `;
-        const [rows] = await connection.execute(query, [Number(turmaId)]);
-        return rows;
-    } finally {
-        await connection.end();
+    const { data, error } = await query.order('criado_em', { ascending: false });
+
+    if (error) {
+        throw new Error(error.message);
     }
+
+    return (data || []).map(r => {
+        const ts = r.criado_em ? new Date(r.criado_em) : null;
+        return {
+            id: r.id,
+            professor_id: r.professor_id,
+            categoria: r.categoria,
+            valor: r.valor,
+            pontos: r.pontos,
+            observacao: r.observacao,
+            data: ts ? ts.toISOString().slice(0, 10) : null,
+            hora: ts ? ts.toISOString().slice(11, 19) : null
+        };
+    });
 }
 
 /**
@@ -113,14 +99,72 @@ export async function puxarIdsAlunosDaTurma(turmaId) {
         throw new Error('CAMPOS_VAZIOS');
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute(
-            `SELECT id FROM alunos WHERE turma_id = ?`,
-            [Number(turmaId)]
-        );
-        return rows.map(r => r.id);
-    } finally {
-        await connection.end();
+    const { data, error } = await supabase
+        .from('alunos')
+        .select('id')
+        .eq('turma_id', Number(turmaId));
+
+    if (error) {
+        throw new Error(error.message);
     }
+    return (data || []).map(r => r.id);
+}
+
+/**
+ * Puxa todas as avaliações de uma turma, com nome dos alunos e professores.
+ * Usada pelo painel "Ocorrências da Turma" do professor.
+ */
+export async function puxarAvaliacoesPorTurma(turmaId) {
+    if (!turmaId) {
+        throw new Error('CAMPOS_VAZIOS');
+    }
+
+    const alunoIds = await puxarIdsAlunosDaTurma(turmaId);
+    if (!alunoIds || alunoIds.length === 0) {
+        return [];
+    }
+
+    const { data, error } = await supabase
+        .from('avaliacoes')
+        .select(`
+            id,
+            aluno_id,
+            professor_id,
+            categoria,
+            valor,
+            pontos,
+            observacao,
+            criado_em,
+            alunos (
+                nome
+            ),
+            professores (
+                name
+            )
+        `)
+        .in('aluno_id', alunoIds)
+        .order('criado_em', { ascending: false });
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    return (data || []).map(a => {
+        const ts = a.criado_em ? new Date(a.criado_em) : null;
+        const aluno = Array.isArray(a.alunos) ? a.alunos[0] : a.alunos;
+        const prof = Array.isArray(a.professores) ? a.professores[0] : a.professores;
+        return {
+            id: a.id,
+            aluno_id: a.aluno_id,
+            professor_id: a.professor_id,
+            categoria: a.categoria,
+            valor: a.valor,
+            pontos: a.pontos,
+            observacao: a.observacao,
+            data: ts ? ts.toISOString().slice(0, 10) : null,
+            hora: ts ? ts.toISOString().slice(11, 19) : null,
+            aluno_nome: aluno?.nome ?? null,
+            professor_nome: prof?.name ?? null
+        };
+    });
 }

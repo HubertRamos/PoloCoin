@@ -1,29 +1,27 @@
-import mysql from 'mysql2/promise';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
+import { supabase } from '../config/supabase.js';
 
 /**
  * Busca um professor pelo ID e retorna nome e senha atuais.
- * Retorna null se não encontrado.
+ * Retorna null se não encontrado ou se o ID for inválido.
  */
 export async function buscarProfessorPorId(id) {
-    const connection = await mysql.createConnection(dbConfig);
+    if (!id) return null;
     try {
-        const [rows] = await connection.execute(
-            'SELECT id, name, password FROM professores WHERE id = ?',
-            [id]
-        );
-        return rows.length > 0 ? rows[0] : null;
+        const { data, error } = await supabase
+            .from('professores')
+            .select('id, name, password')
+            .eq('id', Number(id))
+            .maybeSingle();
+
+        if (error) {
+            console.error('Erro ao buscar professor:', error.message);
+            return null;
+        }
+
+        return data || null;
     } catch (err) {
         console.error('Erro ao buscar professor:', err);
         return null;
-    } finally {
-        await connection.end();
     }
 }
 
@@ -32,17 +30,22 @@ export async function buscarProfessorPorId(id) {
  * Retorna true se atualizado, false se não encontrado.
  */
 export async function atualizarSenhaProfessor(id, novaSenha) {
-    const connection = await mysql.createConnection(dbConfig);
+    if (!id || !novaSenha) return false;
     try {
-        const [result] = await connection.execute(
-            'UPDATE professores SET password = ? WHERE id = ?',
-            [novaSenha, id]
-        );
-        return result.affectedRows > 0;
+        const { data, error } = await supabase
+            .from('professores')
+            .update({ password: novaSenha.trim() })
+            .eq('id', Number(id))
+            .select('id');
+
+        if (error) {
+            console.error('Erro ao atualizar senha:', error.message);
+            return false;
+        }
+
+        return Boolean(data && data.length > 0);
     } catch (err) {
         console.error('Erro ao atualizar senha:', err);
         return false;
-    } finally {
-        await connection.end();
     }
 }

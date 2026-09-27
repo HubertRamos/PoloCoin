@@ -1,11 +1,4 @@
-import mysql from 'mysql2/promise';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
+import { supabase } from '../config/supabase.js';
 
 export async function criarAlunoComResponsavel(turmaId, nomeAluno, nomeResponsavel, senhaAluno, senhaResponsavel) {
     const alunoNomeLimpo = nomeAluno ? nomeAluno.trim() : '';
@@ -17,52 +10,64 @@ export async function criarAlunoComResponsavel(turmaId, nomeAluno, nomeResponsav
         throw new Error('CAMPOS_VAZIOS');
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    
-    try {
-        await connection.beginTransaction();
+    const turmaIdNum = Number(turmaId);
 
-        // 1. Verifica se o aluno já existe nesta turma
-        const [alunoExistente] = await connection.execute(
-            'SELECT id FROM alunos WHERE turma_id = ? AND nome = ?', 
-            [turmaId, alunoNomeLimpo]
-        );
+    // 1. Verifica se o aluno já existe nesta turma
+    const { data: alunoExistente, error: errAlunoExist } = await supabase
+        .from('alunos')
+        .select('id')
+        .eq('turma_id', turmaIdNum)
+        .eq('nome', alunoNomeLimpo)
+        .maybeSingle();
 
-        if (alunoExistente.length > 0) {
-            throw new Error('DUPLICADO');
+    if (errAlunoExist) {
+        throw new Error(errAlunoExist.message);
+    }
+
+    if (alunoExistente) {
+        throw new Error('DUPLICADO');
+    }
+
+    // 2. Verifica se o responsável já existe (evita duplicação)
+    const { data: respExistente, error: errRespExist } = await supabase
+        .from('responsaveis')
+        .select('id')
+        .eq('nome', respNomeLimpo)
+        .maybeSingle();
+
+    if (errRespExist) {
+        throw new Error(errRespExist.message);
+    }
+
+    let responsavelId;
+    if (respExistente) {
+        responsavelId = respExistente.id;
+    } else {
+        const { data: novoResp, error: errNovoResp } = await supabase
+            .from('responsaveis')
+            .insert([{ nome: respNomeLimpo, password: respSenhaLimpa }])
+            .select('id')
+            .single();
+
+        if (errNovoResp) {
+            throw new Error(errNovoResp.message);
         }
+        responsavelId = novoResp.id;
+    }
 
-        // 2. Verifica se o responsável já existe (evita duplicação)
-        const [respExistente] = await connection.execute(
-            'SELECT id FROM responsaveis WHERE nome = ?',
-            [respNomeLimpo]
-        );
+    // 3. Insere o aluno vinculado à turma e ao responsável (pode_comprar padrão: true)
+    const { error: errInsertAluno } = await supabase
+        .from('alunos')
+        .insert([{
+            turma_id: turmaIdNum,
+            responsavel_id: responsavelId,
+            nome: alunoNomeLimpo,
+            password: alunoSenhaLimpa,
+            pode_comprar: true
+        }]);
 
-        let responsavelId;
-        if (respExistente.length > 0) {
-            // Reutiliza o ID do responsável existente
-            responsavelId = respExistente[0].id;
-        } else {
-            // Cria novo responsável
-            const [respResult] = await connection.execute(
-                'INSERT INTO responsaveis (nome, password) VALUES (?, ?)',
-                [respNomeLimpo, respSenhaLimpa]
-            );
-            responsavelId = respResult.insertId;
-        }
-
-        // 3. Insere o aluno vinculado à turma e ao responsável
-        await connection.execute(
-            'INSERT INTO alunos (turma_id, responsavel_id, nome, password) VALUES (?, ?, ?, ?)',
-            [turmaId, responsavelId, alunoNomeLimpo, alunoSenhaLimpa]
-        );
-
-        await connection.commit();
-    } catch (error) {
-        await connection.rollback();
-        throw error;
-    } finally {
-        await connection.end();
+    if (errInsertAluno) {
+        throw new Error(errInsertAluno.message);
     }
 }
 
@@ -71,23 +76,30 @@ export async function puxarAlunosPorTurma(turmaId) {
         throw new Error('CAMPOS_VAZIOS');
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute(`
-            SELECT 
-                a.id, 
-                a.nome AS aluno_nome, 
-                r.nome AS responsavel_nome 
-            FROM alunos a
-            JOIN responsaveis r ON a.responsavel_id = r.id
-            WHERE a.turma_id = ? 
-            ORDER BY a.nome
-        `, [turmaId]);
+    const { data, error } = await supabase
+        .from('alunos')
+        .select(`
+            id,
+            nome,
+            responsaveis (
+                nome
+            )
+        `)
+        .eq('turma_id', Number(turmaId))
+        .order('nome', { ascending: true });
 
-        return rows;
-    } finally {
-        await connection.end();
+    if (error) {
+        throw new Error(error.message);
     }
+
+    return (data || []).map(a => {
+        const resp = Array.isArray(a.responsaveis) ? a.responsaveis[0] : a.responsaveis;
+        return {
+            id: a.id,
+            aluno_nome: a.nome,
+            responsavel_nome: resp?.nome ?? null
+        };
+    });
 }
 
 /**
@@ -98,31 +110,48 @@ export async function puxarAvaliacoesDoAluno(alunoId) {
         throw new Error('CAMPOS_VAZIOS');
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute(`
-            SELECT
-                av.id AS avaliacao_id,
-                av.categoria,
-                av.valor,
-                av.pontos,
-                av.observacao,
-                DATE(av.criado_em) AS data,
-                TIME(av.criado_em) AS hora,
-                t.serie,
-                t.turma,
-                al.nome AS aluno_nome
-            FROM avaliacoes av
-            JOIN alunos al ON av.aluno_id = al.id
-            JOIN turmas t ON al.turma_id = t.id
-            WHERE av.aluno_id = ?
-            ORDER BY av.criado_em DESC
-        `, [alunoId]);
+    const { data, error } = await supabase
+        .from('avaliacoes')
+        .select(`
+            id,
+            categoria,
+            valor,
+            pontos,
+            observacao,
+            criado_em,
+            alunos (
+                nome,
+                turmas (
+                    serie,
+                    turma
+                )
+            )
+        `)
+        .eq('aluno_id', Number(alunoId))
+        .order('criado_em', { ascending: false });
 
-        return rows;
-    } finally {
-        await connection.end();
+    if (error) {
+        throw new Error(error.message);
     }
+
+    return (data || []).map(av => {
+        const aluno = Array.isArray(av.alunos) ? av.alunos[0] : av.alunos;
+        const turma = aluno?.turmas ? (Array.isArray(aluno.turmas) ? aluno.turmas[0] : aluno.turmas) : null;
+        const ts = av.criado_em ? new Date(av.criado_em) : null;
+
+        return {
+            avaliacao_id: av.id,
+            categoria: av.categoria,
+            valor: av.valor,
+            pontos: av.pontos,
+            observacao: av.observacao,
+            data: ts ? ts.toISOString().slice(0, 10) : null,
+            hora: ts ? ts.toISOString().slice(11, 19) : null,
+            serie: turma?.serie ?? null,
+            turma: turma?.turma ?? null,
+            aluno_nome: aluno?.nome ?? null
+        };
+    });
 }
 
 /**
@@ -133,31 +162,36 @@ export async function atualizarSenhaAluno(alunoId, senhaAtual, novaSenha) {
         throw new Error('CAMPOS_VAZIOS');
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        // Verifica senha atual se fornecida
-        if (senhaAtual) {
-            const [aluno] = await connection.execute(
-                'SELECT password FROM alunos WHERE id = ?',
-                [alunoId]
-            );
-            if (aluno.length === 0) {
-                throw new Error('ALUNO_NAO_ENCONTRADO');
-            }
-            if (aluno[0].password !== senhaAtual) {
-                throw new Error('SENHA_ATUAL_INVALIDA');
-            }
+    const alunoIdNum = Number(alunoId);
+
+    // Verifica senha atual se fornecida
+    if (senhaAtual) {
+        const { data: aluno, error: errBusca } = await supabase
+            .from('alunos')
+            .select('password')
+            .eq('id', alunoIdNum)
+            .maybeSingle();
+
+        if (errBusca) {
+            throw new Error(errBusca.message);
         }
-
-        // Atualiza a senha
-        await connection.execute(
-            'UPDATE alunos SET password = ? WHERE id = ?',
-            [novaSenha.trim(), alunoId]
-        );
-
-        return { success: true };
-    } finally {
-        await connection.end();
+        if (!aluno) {
+            throw new Error('ALUNO_NAO_ENCONTRADO');
+        }
+        if (aluno.password !== senhaAtual) {
+            throw new Error('SENHA_ATUAL_INVALIDA');
+        }
     }
-}
 
+    // Atualiza a senha
+    const { error: errUpdate } = await supabase
+        .from('alunos')
+        .update({ password: novaSenha.trim() })
+        .eq('id', alunoIdNum);
+
+    if (errUpdate) {
+        throw new Error(errUpdate.message);
+    }
+
+    return { success: true };
+}

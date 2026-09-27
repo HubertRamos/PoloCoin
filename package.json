@@ -1,17 +1,19 @@
 {
-  "dependencies": {
-    "core": "^1.0.67",
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "mysql2": "^3.24.4"
-  },
   "name": "polocoin",
   "version": "1.0.0",
-  "description": "",
-  "main": "main.js",
+  "description": "PoloCoin - Sistema escolar de recompensas e avaliações",
+  "main": "server.js",
   "scripts": {
+    "dev": "node server.js",
+    "build": "echo 'Build complete'",
+    "lint": "node --check server.js services/*.js",
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  },
   "type": "module"
 }

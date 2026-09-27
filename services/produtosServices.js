@@ -1,128 +1,182 @@
-import mysql from 'mysql2/promise';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
+import { supabase } from '../config/supabase.js';
 
 /** Busca todos os produtos com categoria. */
 export async function puxarTodosProdutos() {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute(`
-            SELECT
-                p.id,
-                p.nome,
-                p.custo_pontos,
-                p.categoria_id,
-                c.nome AS categoria_nome
-            FROM produtos p
-            LEFT JOIN categorias c ON p.categoria_id = c.id
-            ORDER BY p.id DESC
-        `);
-        return rows;
-    } finally {
-        await connection.end();
+    const { data, error } = await supabase
+        .from('produtos')
+        .select(`
+            id,
+            nome,
+            custo_pontos,
+            categoria_id,
+            categorias (
+                nome
+            )
+        `)
+        .order('id', { ascending: false });
+
+    if (error) {
+        throw new Error(error.message);
     }
+
+    return (data || []).map(p => {
+        const cat = Array.isArray(p.categorias) ? p.categorias[0] : p.categorias;
+        return {
+            id: p.id,
+            nome: p.nome,
+            custo_pontos: p.custo_pontos,
+            categoria_id: p.categoria_id,
+            categoria_nome: cat?.nome ?? null
+        };
+    });
 }
 
 /** Busca produtos com filtros (categoria e/ou busca por nome). */
 export async function puxarProdutosFiltrados({ categoria = null, busca = null } = {}) {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        let sql = `
-            SELECT
-                p.id,
-                p.nome,
-                p.custo_pontos,
-                p.categoria_id,
-                c.nome AS categoria_nome
-            FROM produtos p
-            LEFT JOIN categorias c ON p.categoria_id = c.id
-        `;
-        const conditions = [];
-        const params = [];
+    let query = supabase
+        .from('produtos')
+        .select(`
+            id,
+            nome,
+            custo_pontos,
+            categoria_id,
+            categorias (
+                nome
+            )
+        `)
+        .order('id', { ascending: false });
 
-        if (categoria) {
-            conditions.push('c.nome = ?');
-            params.push(categoria);
-        }
-        if (busca && busca.trim()) {
-            conditions.push('p.nome LIKE ?');
-            params.push(`%${busca.trim()}%`);
-        }
-
-        if (conditions.length) {
-            sql += ' WHERE ' + conditions.join(' AND ');
-        }
-        sql += ' ORDER BY p.id DESC';
-
-        const [rows] = await connection.execute(sql, params);
-        return rows;
-    } finally {
-        await connection.end();
+    if (busca && busca.trim()) {
+        query = query.ilike('nome', `%${busca.trim()}%`);
     }
+
+    const { data, error } = await query;
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    let rows = (data || []).map(p => {
+        const cat = Array.isArray(p.categorias) ? p.categorias[0] : p.categorias;
+        return {
+            id: p.id,
+            nome: p.nome,
+            custo_pontos: p.custo_pontos,
+            categoria_id: p.categoria_id,
+            categoria_nome: cat?.nome ?? null
+        };
+    });
+
+    if (categoria) {
+        rows = rows.filter(r => r.categoria_nome === categoria);
+    }
+
+    return rows;
 }
 
 /** Retorna lista de categorias para o filtro. */
 export async function puxarCategoriasParaFiltro() {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute(
-            'SELECT id, nome FROM categorias ORDER BY nome'
-        );
-        return rows;
-    } finally {
-        await connection.end();
+    const { data, error } = await supabase
+        .from('categorias')
+        .select('id, nome')
+        .order('nome', { ascending: true });
+
+    if (error) {
+        throw new Error(error.message);
     }
+    return data || [];
 }
 
 /** Cria um novo produto. */
 export async function criarProduto(nome, preco, categoria_id = null) {
-    if (!nome || !preco) throw new Error('CAMPOS_VAZIOS');
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [result] = await connection.execute(
-            'INSERT INTO produtos (nome, custo_pontos, categoria_id) VALUES (?, ?, ?)',
-            [nome.trim(), parseInt(preco), categoria_id]
-        );
-        return { id: result.insertId, nome, custo_pontos: parseInt(preco), categoria_id };
-    } finally {
-        await connection.end();
+    if (!nome || preco === undefined || preco === null) {
+        throw new Error('CAMPOS_VAZIOS');
     }
+
+    const { data, error } = await supabase
+        .from('produtos')
+        .insert([{
+            nome: nome.trim(),
+            custo_pontos: parseInt(preco, 10),
+            categoria_id: categoria_id ? Number(categoria_id) : null
+        }])
+        .select('id')
+        .single();
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    return {
+        id: data.id,
+        nome: nome.trim(),
+        custo_pontos: parseInt(preco, 10),
+        categoria_id
+    };
 }
 
 /** Busca todas as categorias. */
 export async function puxarTodasCategorias() {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute('SELECT id, nome FROM categorias ORDER BY nome');
-        return rows;
-    } finally {
-        await connection.end();
+    const { data, error } = await supabase
+        .from('categorias')
+        .select('id, nome')
+        .order('nome', { ascending: true });
+
+    if (error) {
+        throw new Error(error.message);
     }
+    return data || [];
 }
 
-/** Cria categoria se não existir. */
-export async function criarCategoriaSeNecesaria(nome) {
-    if (!nome) return null;
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [existing] = await connection.execute(
-            'SELECT id FROM categorias WHERE nome = ?',
-            [nome.trim()]
-        );
-        if (existing.length > 0) return existing[0].id;
-        const [result] = await connection.execute(
-            'INSERT INTO categorias (nome) VALUES (?)',
-            [nome.trim()]
-        );
-        return result.insertId;
-    } finally {
-        await connection.end();
+/** Cria categoria se não existir, ou retorna o ID se já for numérico. */
+export async function criarCategoriaSeNecesaria(categoriaOuId) {
+    if (!categoriaOuId) return null;
+
+    // Se já for um ID numérico ou string numérica, valida se a categoria existe
+    if (typeof categoriaOuId === 'number' || (typeof categoriaOuId === 'string' && /^\d+$/.test(categoriaOuId.trim()))) {
+        const idNum = Number(categoriaOuId);
+        const { data: existId } = await supabase
+            .from('categorias')
+            .select('id')
+            .eq('id', idNum)
+            .maybeSingle();
+
+        if (existId) return existId.id;
     }
+
+    const nomeLimpo = String(categoriaOuId).trim();
+    if (!nomeLimpo) return null;
+
+    const { data: existing, error: errExist } = await supabase
+        .from('categorias')
+        .select('id')
+        .eq('nome', nomeLimpo)
+        .maybeSingle();
+
+    if (errExist) {
+        throw new Error(errExist.message);
+    }
+
+    if (existing) return existing.id;
+
+    const { data, error } = await supabase
+        .from('categorias')
+        .insert([{ nome: nomeLimpo }])
+        .select('id')
+        .single();
+
+    if (error) {
+        // Possível concorrência com chave única
+        const { data: again, error: errAgain } = await supabase
+            .from('categorias')
+            .select('id')
+            .eq('nome', nomeLimpo)
+            .maybeSingle();
+
+        if (again) return again.id;
+        throw new Error(errAgain ? errAgain.message : error.message);
+    }
+
+    return data.id;
 }
 
 /** Garante que as categorias básicas existam. */
@@ -131,18 +185,11 @@ export async function garantirCategoriasBasicas() {
         'Alimentação', 'Beleza', 'Vestuário', 'Limpeza',
         'Eletrônicos', 'Brinquedos', 'Outros'
     ];
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        for (const nome of categorias) {
-            const [existing] = await connection.execute(
-                'SELECT id FROM categorias WHERE nome = ?',
-                [nome]
-            );
-            if (existing.length === 0) {
-                await connection.execute('INSERT INTO categorias (nome) VALUES (?)', [nome]);
-            }
+    for (const nome of categorias) {
+        try {
+            await criarCategoriaSeNecesaria(nome);
+        } catch (err) {
+            // Ignora se não puder inserir devido a RLS ou tabela já populada
         }
-    } finally {
-        await connection.end();
     }
 }

@@ -33,7 +33,7 @@ async function carregarDadosDaTurmaEAlunos() {
     }
 
     try {
-        const resposta = await fetch(`http://localhost:3333/turmas/${turmaId}/alunos`)
+        const resposta = await fetch(`/turmas/${turmaId}/alunos`)
         const alunos = await resposta.json()
 
         if (alunos.length === 0) {
@@ -217,7 +217,7 @@ function Render() {
             const senhaResponsavel = document.getElementById('senha-responsavel-input').value.trim()
 
             try {
-                const resposta = await fetch(`http://localhost:3333/turmas/${turmaId}/alunos`, {
+                const resposta = await fetch(`/turmas/${turmaId}/alunos`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

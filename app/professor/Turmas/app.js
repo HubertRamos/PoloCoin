@@ -16,7 +16,7 @@ async function carregarTurmas() {
     }
 
     try {
-        const resposta = await fetch(`http://localhost:3333/professor/turmas?id=${professorId}&_=${Date.now()}`)
+        const resposta = await fetch(`/professor/turmas?id=${professorId}&_=${Date.now()}`)
         const dados = await resposta.json()
 
         const turmasVinculadas = dados.vinculadas || []

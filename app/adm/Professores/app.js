@@ -19,7 +19,7 @@ async function carregarDashboard() {
     if (!contentDiv) return
 
     try {
-        const resposta = await fetch('http://localhost:3333/professores')
+        const resposta = await fetch('/professores')
         const professores = await resposta.json()
 
         if (professores.length === 0) {
@@ -218,7 +218,7 @@ function Render() {
                         const password = colunas[1].trim()
 
                         try {
-                            const resposta = await fetch('http://localhost:3333/cadastrar', {
+                            const resposta = await fetch('/cadastrar', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ name, password })
@@ -256,7 +256,7 @@ function Render() {
 
 async function enviarParaBackend(name, password, formElement) {
     try {
-        const resposta = await fetch('http://localhost:3333/cadastrar', {
+        const resposta = await fetch('/cadastrar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, password })

@@ -18,7 +18,7 @@ async function carregarTurmas() {
     if (!contentDiv) return
 
     try {
-        const resposta = await fetch('http://localhost:3333/turmas')
+        const resposta = await fetch('/turmas')
         const turmas = await resposta.json()
 
         if (turmas.length === 0) {
@@ -225,7 +225,7 @@ function Render() {
             const turma = document.getElementById('turma-input').value.trim()
 
             try {
-                const resposta = await fetch('http://localhost:3333/turmas', {
+                const resposta = await fetch('/turmas', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ serie: Number(serie), turma: turma })

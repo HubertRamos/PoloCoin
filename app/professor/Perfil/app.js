@@ -84,7 +84,7 @@ async function carregarTurmas() {
     if (!professorId) return
 
     try {
-        const resposta = await fetch(`http://localhost:3333/professor/turmas?id=${professorId}&_=${Date.now()}`)
+        const resposta = await fetch(`/professor/turmas?id=${professorId}&_=${Date.now()}`)
         const dados = await resposta.json()
 
         const turmasVinculadas = dados.vinculadas || []
@@ -159,7 +159,7 @@ async function vincularTurma(professorId, turmaId, btn) {
     btn.disabled = true
 
     try {
-        const resposta = await fetch('http://localhost:3333/professor/turmas/vincular', {
+        const resposta = await fetch('/professor/turmas/vincular', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ professorId, turmaId })
@@ -193,7 +193,7 @@ async function desvincularTurma(professorId, turmaId, btn) {
     btn.disabled = true
 
     try {
-        const resposta = await fetch('http://localhost:3333/professor/turmas/desvincular', {
+        const resposta = await fetch('/professor/turmas/desvincular', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ professorId, turmaId })
@@ -246,7 +246,7 @@ function vincularEventos() {
         btnSalvar.classList.add('btn-primary--loading')
 
         try {
-            const resposta = await fetch('http://localhost:3333/professor/senha', {
+            const resposta = await fetch('/professor/senha', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

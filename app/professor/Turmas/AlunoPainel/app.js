@@ -61,21 +61,21 @@ async function carregarDadosDoAluno() {
         let alunoEncontrado = null
 
         if (turmaId) {
-            const turmaResp = await fetch(`http://localhost:3333/turmas/${turmaId}`)
+            const turmaResp = await fetch(`/turmas/${turmaId}`)
             if (turmaResp.ok) {
                 turmaEncontrada = await turmaResp.json()
             }
         }
 
         if (!turmaEncontrada) {
-            const turmas = await fetch("http://localhost:3333/turmas").then(r => r.json())
+            const turmas = await fetch("/turmas").then(r => r.json())
             for (const t of turmas) {
-                const alunos = await fetch(`http://localhost:3333/turmas/${t.id}/alunos`).then(r => r.json())
+                const alunos = await fetch(`/turmas/${t.id}/alunos`).then(r => r.json())
                 const a = alunos.find(al => al.id == alunoId)
                 if (a) { alunoEncontrado = a; turmaEncontrada = t; break }
             }
         } else {
-            const alunos = await fetch(`http://localhost:3333/turmas/${turmaId}/alunos`).then(r => r.json())
+            const alunos = await fetch(`/turmas/${turmaId}/alunos`).then(r => r.json())
             alunoEncontrado = alunos.find(a => a.id == alunoId)
         }
 
@@ -84,7 +84,7 @@ async function carregarDadosDoAluno() {
             return
         }
 
-        avaliacoes = await fetch(`http://localhost:3333/avaliacoes/${alunoId}`).then(r => r.json())
+        avaliacoes = await fetch(`/avaliacoes/${alunoId}`).then(r => r.json())
 
         contentDiv.innerHTML = `
             <div class="card card--lg">
@@ -190,7 +190,7 @@ async function carregarDadosDoAluno() {
                 if (!pid) { alert("Professor não logado."); return }
 
                 try {
-                    const res = await fetch("http://localhost:3333/avaliacoes", {
+                    const res = await fetch("/avaliacoes", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ alunoId, professorId: pid, categoria, valor, observacao: "" }),
@@ -220,7 +220,7 @@ async function carregarDadosDoAluno() {
             if (!professorId) { alert("Professor não logado."); return }
 
             try {
-                const res = await fetch("http://localhost:3333/avaliacoes", {
+                const res = await fetch("/avaliacoes", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ alunoId, professorId, categoria: "observacao", valor: obs, observacao: `${obs} — ${data} ${hora}` }),

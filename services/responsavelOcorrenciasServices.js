@@ -1,15 +1,9 @@
-import mysql from 'mysql2/promise';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
+import { supabase } from '../config/supabase.js';
 
 /**
  * Busca ocorrências negativas de todos os alunos de um responsável.
  * Considera negativo: pontos <= 10 ou valor em lista de valores negativos.
+ * Usa booleano false para 'consentido'.
  */
 export async function puxarOcorrenciasNegativasDoResponsavel(responsavelId) {
     if (!responsavelId) {
@@ -21,48 +15,80 @@ export async function puxarOcorrenciasNegativasDoResponsavel(responsavelId) {
         'isolado', 'desinteressado', 'indiferente', 'atrasado'
     ];
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute(`
-            SELECT
-                al.id AS aluno_id,
-                al.nome AS aluno_nome,
-                av.id AS avaliacao_id,
-                av.categoria,
-                av.valor,
-                av.pontos,
-                av.observacao,
-                DATE(av.criado_em) AS data,
-                TIME(av.criado_em) AS hora,
-                t.serie,
-                t.turma
-            FROM alunos al
-            JOIN responsaveis r ON al.responsavel_id = r.id
-            JOIN avaliacoes av ON al.id = av.aluno_id
-            JOIN turmas t ON al.turma_id = t.id
-            WHERE r.id = ?
-              AND av.consentido = 0
-              AND (av.pontos <= 10 OR av.valor IN (${valoresNegativos.map(() => '?').join(',')}))
-            ORDER BY av.criado_em DESC
-        `, [responsavelId, ...valoresNegativos]);
+    // 1. Busca os alunos do responsável
+    const { data: alunos, error: errAlunos } = await supabase
+        .from('alunos')
+        .select(`
+            id,
+            nome,
+            turmas (
+                serie,
+                turma
+            )
+        `)
+        .eq('responsavel_id', Number(responsavelId));
 
-        return rows;
-    } finally {
-        await connection.end();
+    if (errAlunos) {
+        throw new Error(errAlunos.message);
     }
+    if (!alunos || alunos.length === 0) return [];
+
+    const alunoIds = alunos.map(a => a.id);
+    const alunoMap = new Map(alunos.map(a => [a.id, a]));
+
+    // 2. Busca avaliações não consentidas desses alunos
+    const { data: avaliacoes, error: errAv } = await supabase
+        .from('avaliacoes')
+        .select('id, aluno_id, categoria, valor, pontos, observacao, criado_em, consentido')
+        .in('aluno_id', alunoIds)
+        .eq('consentido', false)
+        .order('criado_em', { ascending: false });
+
+    if (errAv) {
+        throw new Error(errAv.message);
+    }
+
+    const rows = [];
+    for (const av of (avaliacoes || [])) {
+        const isNegativo = (av.pontos !== null && av.pontos <= 10) || valoresNegativos.includes(av.valor);
+        if (!isNegativo) continue;
+
+        const aluno = alunoMap.get(av.aluno_id);
+        const turma = aluno?.turmas ? (Array.isArray(aluno.turmas) ? aluno.turmas[0] : aluno.turmas) : null;
+        const ts = av.criado_em ? new Date(av.criado_em) : null;
+
+        rows.push({
+            aluno_id: av.aluno_id,
+            aluno_nome: aluno?.nome ?? null,
+            avaliacao_id: av.id,
+            categoria: av.categoria,
+            valor: av.valor,
+            pontos: av.pontos,
+            observacao: av.observacao,
+            data: ts ? ts.toISOString().slice(0, 10) : null,
+            hora: ts ? ts.toISOString().slice(11, 19) : null,
+            serie: turma?.serie ?? null,
+            turma: turma?.turma ?? null
+        });
+    }
+
+    return rows;
 }
 
 /**
- * Marca uma avaliação como consentida pelo responsável.
+ * Marca uma avaliação como consentida pelo responsável (consentido: true).
  */
 export async function marcarComoConsentida(avaliacaoId) {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        await connection.execute(
-            'UPDATE avaliacoes SET consentido = 1 WHERE id = ?',
-            [avaliacaoId]
-        );
-    } finally {
-        await connection.end();
+    if (!avaliacaoId) {
+        throw new Error('CAMPOS_VAZIOS');
+    }
+
+    const { error } = await supabase
+        .from('avaliacoes')
+        .update({ consentido: true })
+        .eq('id', Number(avaliacaoId));
+
+    if (error) {
+        throw new Error(error.message);
     }
 }

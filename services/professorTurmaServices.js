@@ -1,73 +1,97 @@
-import mysql from 'mysql2/promise';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
+import { supabase } from '../config/supabase.js';
 
 export async function puxarTurmasDoProfessor(professorId) {
     if (!professorId) {
         throw new Error('CAMPOS_VAZIOS');
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute(`
-            SELECT pt.professor_id, pt.turma_id, t.serie, t.turma
-            FROM professor_turmas pt
-            JOIN turmas t ON pt.turma_id = t.id
-            WHERE pt.professor_id = ?
-        `, [professorId]);
+    const { data, error } = await supabase
+        .from('professor_turmas')
+        .select(`
+            professor_id,
+            turma_id,
+            turmas (
+                serie,
+                turma
+            )
+        `)
+        .eq('professor_id', Number(professorId));
 
-        return rows;
-    } finally {
-        await connection.end();
+    if (error) {
+        throw new Error(error.message);
     }
+
+    return (data || []).map(pt => {
+        const t = Array.isArray(pt.turmas) ? pt.turmas[0] : pt.turmas;
+        return {
+            professor_id: pt.professor_id,
+            turma_id: pt.turma_id,
+            serie: t?.serie ?? null,
+            turma: t?.turma ?? null
+        };
+    });
 }
 
 export async function puxarTodasTurmas() {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute(`
-            SELECT id, serie, turma FROM turmas
-        `);
+    const { data, error } = await supabase
+        .from('turmas')
+        .select('id, serie, turma')
+        .order('serie', { ascending: true })
+        .order('turma', { ascending: true });
 
-        return rows;
-    } finally {
-        await connection.end();
+    if (error) {
+        throw new Error(error.message);
     }
+    return data || [];
 }
 
 export async function vincularTurmaProfessor(professorId, turmaId) {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        await connection.execute(
-            'INSERT IGNORE INTO professor_turmas (professor_id, turma_id) VALUES (?, ?)',
-            [professorId, turmaId]
-        );
-
-        return { success: true, message: 'Turma vinculada com sucesso!' };
-    } catch (error) {
-        throw error;
-    } finally {
-        await connection.end();
+    if (!professorId || !turmaId) {
+        throw new Error('CAMPOS_VAZIOS');
     }
+
+    const pId = Number(professorId);
+    const tId = Number(turmaId);
+
+    // Evita duplicatas simulando o INSERT IGNORE
+    const { data: existente, error: errCheck } = await supabase
+        .from('professor_turmas')
+        .select('professor_id')
+        .eq('professor_id', pId)
+        .eq('turma_id', tId)
+        .maybeSingle();
+
+    if (errCheck) {
+        throw new Error(errCheck.message);
+    }
+
+    if (!existente) {
+        const { error } = await supabase
+            .from('professor_turmas')
+            .insert([{ professor_id: pId, turma_id: tId }]);
+
+        if (error && error.code !== '23505') {
+            throw new Error(error.message);
+        }
+    }
+
+    return { success: true, message: 'Turma vinculada com sucesso!' };
 }
 
 export async function desvincularTurmaProfessor(professorId, turmaId) {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [result] = await connection.execute(
-            'DELETE FROM professor_turmas WHERE professor_id = ? AND turma_id = ?',
-            [professorId, turmaId]
-        );
-
-        return { success: true, message: 'Turma desvinculada com sucesso!' };
-    } catch (error) {
-        throw error;
-    } finally {
-        await connection.end();
+    if (!professorId || !turmaId) {
+        throw new Error('CAMPOS_VAZIOS');
     }
+
+    const { error } = await supabase
+        .from('professor_turmas')
+        .delete()
+        .eq('professor_id', Number(professorId))
+        .eq('turma_id', Number(turmaId));
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    return { success: true, message: 'Turma desvinculada com sucesso!' };
 }

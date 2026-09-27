@@ -1,137 +1,136 @@
--- PoloCoin - Restauração do banco de dados
--- MySQL / MariaDB
--- Atualizado em 2026-09-26 com todas as tabelas e colunas do sistema
+-- ============================================================
+-- PoloCoin — Migration 001: Schema Otimizado (Supabase Compatible)
+-- ============================================================
 
-CREATE DATABASE IF NOT EXISTS sistema_poloCoin;
-USE sistema_poloCoin;
+-- 0. Extensões
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- ============================================================
--- Professores
--- ============================================================
-CREATE TABLE IF NOT EXISTS professores (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(40) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL
-);
-
--- ============================================================
--- Admins
--- ============================================================
+-- 1. Tabela: admins
 CREATE TABLE IF NOT EXISTS admins (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(40) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL, -- Certifique-se de salvar HASH no backend
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ============================================================
--- Categorias de avaliação
--- ============================================================
+-- 2. Tabela: professores
+CREATE TABLE IF NOT EXISTS professores (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Tabela: categorias
 CREATE TABLE IF NOT EXISTS categorias (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nome VARCHAR(100) NOT NULL UNIQUE,
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ============================================================
--- Produtos
--- ============================================================
+-- 4. Tabela: produtos
 CREATE TABLE IF NOT EXISTS produtos (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nome VARCHAR(150) NOT NULL,
-    custo_pontos INT NOT NULL DEFAULT 0,
-    categoria_id INT,
-    CONSTRAINT fk_produto_categoria
-        FOREIGN KEY (categoria_id)
-        REFERENCES categorias(id)
-        ON DELETE SET NULL
-        ON UPDATE CASCADE
+    custo_pontos INT NOT NULL DEFAULT 0 CHECK (custo_pontos >= 0),
+    categoria_id BIGINT REFERENCES categorias(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ============================================================
--- Turmas
--- ============================================================
+CREATE INDEX IF NOT EXISTS idx_produtos_categoria_id ON produtos(categoria_id);
+
+-- 5. Tabela: turmas
 CREATE TABLE IF NOT EXISTS turmas (
-    id INTEGER PRIMARY KEY AUTO_INCREMENT,
-    serie INTEGER NOT NULL,
-    turma TEXT NOT NULL
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    serie INT NOT NULL,
+    turma VARCHAR(10) NOT NULL,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(serie, turma)
 );
 
--- ============================================================
--- Responsáveis
--- ============================================================
+-- 6. Tabela: responsaveis
 CREATE TABLE IF NOT EXISTS responsaveis (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    nome VARCHAR(255) NOT NULL,
-    password VARCHAR(255) NOT NULL
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ============================================================
--- Alunos
--- ============================================================
+-- 7. Tabela: alunos
 CREATE TABLE IF NOT EXISTS alunos (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    turma_id INT NOT NULL,
-    responsavel_id INT NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    turma_id BIGINT NOT NULL REFERENCES turmas(id) ON DELETE CASCADE,
+    responsavel_id BIGINT NOT NULL REFERENCES responsaveis(id) ON DELETE CASCADE,
     nome VARCHAR(255) NOT NULL,
     password VARCHAR(255) NOT NULL,
-    pontos INT NOT NULL DEFAULT 0,
-    pode_comprar TINYINT(1) NOT NULL DEFAULT 0,
-    FOREIGN KEY (turma_id) REFERENCES turmas(id) ON DELETE CASCADE,
-    FOREIGN KEY (responsavel_id) REFERENCES responsaveis(id) ON DELETE CASCADE
+    pontos INT NOT NULL DEFAULT 0 CHECK (pontos >= 0),
+    pode_comprar BOOLEAN NOT NULL DEFAULT false,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(turma_id, nome)
 );
 
--- ============================================================
--- Avaliações
--- ============================================================
+CREATE INDEX IF NOT EXISTS idx_alunos_turma_id ON alunos(turma_id);
+CREATE INDEX IF NOT EXISTS idx_alunos_responsavel_id ON alunos(responsavel_id);
+
+-- 8. Tabela: professor_turmas
+CREATE TABLE IF NOT EXISTS professor_turmas (
+    professor_id BIGINT NOT NULL REFERENCES professores(id) ON DELETE CASCADE,
+    turma_id BIGINT NOT NULL REFERENCES turmas(id) ON DELETE CASCADE,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (professor_id, turma_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_professor_turmas_turma_id ON professor_turmas(turma_id);
+
+-- 9. Tabela: avaliacoes
 CREATE TABLE IF NOT EXISTS avaliacoes (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    aluno_id INT NOT NULL,
-    professor_id INT NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    aluno_id BIGINT NOT NULL REFERENCES alunos(id) ON DELETE CASCADE,
+    professor_id BIGINT NOT NULL REFERENCES professores(id) ON DELETE CASCADE,
     categoria VARCHAR(50) NOT NULL,
     valor VARCHAR(255) NOT NULL,
-    pontos INT DEFAULT 0,
+    pontos INT NOT NULL DEFAULT 0,
     observacao TEXT,
-    consentido TINYINT(1) NOT NULL DEFAULT 0,
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (aluno_id) REFERENCES alunos(id) ON DELETE CASCADE,
-    FOREIGN KEY (professor_id) REFERENCES professores(id) ON DELETE CASCADE
+    consentido BOOLEAN NOT NULL DEFAULT false,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ============================================================
--- Vínculo professor-turma
--- ============================================================
-CREATE TABLE IF NOT EXISTS professor_turmas (
-    professor_id INT NOT NULL,
-    turma_id INT NOT NULL,
-    PRIMARY KEY (professor_id, turma_id),
-    FOREIGN KEY (professor_id) REFERENCES professores(id) ON DELETE CASCADE,
-    FOREIGN KEY (turma_id) REFERENCES turmas(id) ON DELETE CASCADE
-);
+CREATE INDEX IF NOT EXISTS idx_avaliacoes_aluno_id ON avaliacoes(aluno_id);
+CREATE INDEX IF NOT EXISTS idx_avaliacoes_professor_id ON avaliacoes(professor_id);
 
--- ============================================================
--- Desejos (fila de pedidos dos alunos)
--- ============================================================
+-- 10. Tabela: desejos
 CREATE TABLE IF NOT EXISTS desejos (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    aluno_id INT NOT NULL,
-    produto_id INT NOT NULL,
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (aluno_id) REFERENCES alunos(id) ON DELETE CASCADE,
-    FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    aluno_id BIGINT NOT NULL REFERENCES alunos(id) ON DELETE CASCADE,
+    produto_id BIGINT NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(aluno_id, produto_id) -- Impede itens duplicados na lista de desejos
 );
 
--- ============================================================
--- Compras (histórico de compras dos alunos)
--- ============================================================
+CREATE INDEX IF NOT EXISTS idx_desejos_aluno_id ON desejos(aluno_id);
+CREATE INDEX IF NOT EXISTS idx_desejos_produto_id ON desejos(produto_id);
+
+-- 11. Tabela: compras
 CREATE TABLE IF NOT EXISTS compras (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    aluno_id INT NOT NULL,
-    produto_id INT NOT NULL,
-    custo_pontos INT NOT NULL,
-    autorizado_por INT,
-    entregue TINYINT(1) NOT NULL DEFAULT 0,
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (aluno_id) REFERENCES alunos(id) ON DELETE CASCADE,
-    FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE,
-    FOREIGN KEY (autorizado_por) REFERENCES responsaveis(id) ON DELETE SET NULL
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    aluno_id BIGINT NOT NULL REFERENCES alunos(id) ON DELETE CASCADE,
+    produto_id BIGINT NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+    custo_pontos INT NOT NULL CHECK (custo_pontos >= 0),
+    autorizado_por BIGINT REFERENCES responsaveis(id) ON DELETE SET NULL,
+    entregue BOOLEAN NOT NULL DEFAULT false,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_compras_aluno_id ON compras(aluno_id);
+CREATE INDEX IF NOT EXISTS idx_compras_produto_id ON compras(produto_id);
+CREATE INDEX IF NOT EXISTS idx_compras_entregue ON compras(entregue);
+
+-- ============================================================
+-- Carga Inicial (Seed Data)
+-- ============================================================
+
+-- NOTA: Substitua 'adm123' pelo hash gerado pela sua aplicação (ex: bcrypt/argon2)
+INSERT INTO admins (name, password)
+VALUES ('adm', 'adm123')
+ON CONFLICT (name) DO UPDATE 
+SET password = EXCLUDED.password;

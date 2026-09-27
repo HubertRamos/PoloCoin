@@ -1,11 +1,4 @@
-import mysql from 'mysql2/promise';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
+import { supabase } from '../config/supabase.js';
 
 /**
  * Mapeia cada tabela para o nome da coluna de identificação.
@@ -19,32 +12,9 @@ const COLUNA_NOME = {
 };
 
 /**
- * Busca um usuário por nome e senha em uma tabela específica.
- * Retorna o registro (id, nome) ou null se não encontrar.
- * Nunca lança erro — falhas de DB são silenciadas e retornam null.
- */
-async function buscarPorNomeESenha(tabela, name, password) {
-    const coluna = COLUNA_NOME[tabela] || 'name';
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute(
-            `SELECT id, ${coluna} FROM ${tabela} WHERE ${coluna} = ? AND password = ?`,
-            [name, password]
-        );
-        return rows.length > 0 ? rows[0] : null;
-    } catch (err) {
-        // Falha de DB (conexão, tabela inexistente, coluna errada...)
-        // Não propagamos — retornamos null para que a criação prossiga.
-        return null;
-    } finally {
-        await connection.end();
-    }
-}
-
-/**
- * Login unificado: verifica nas 4 tabelas (admins, professores, alunos, responsaveis)
- * na ordem e retorna o primeiro match com o tipo de usuário.
- * Retorna null se nenhum usuário for encontrado — nunca lança.
+ * Login unificado: verifica na tabela correspondente ao tipo escolhido
+ * e retorna o match com o tipo de usuário.
+ * Retorna null se nenhum usuário for encontrado ou em caso de credenciais inválidas.
  */
 export async function login(nome, senha, tipo) {
     if (!nome || !senha || !tipo) {
@@ -54,7 +24,6 @@ export async function login(nome, senha, tipo) {
     const nomeLimpo = nome.trim();
     const senhaLimpa = senha.trim();
 
-    // Só verifica a tabela correspondente ao tipo escolhido
     const mapa = {
         adm: 'admins',
         professor: 'professores',
@@ -67,19 +36,26 @@ export async function login(nome, senha, tipo) {
 
     const coluna = COLUNA_NOME[tabela] || 'name';
 
-    const connection = await mysql.createConnection(dbConfig);
     try {
-        const [rows] = await connection.execute(
-            `SELECT id, ${coluna} FROM ${tabela} WHERE ${coluna} = ? AND password = ?`,
-            [nomeLimpo, senhaLimpa]
-        );
-        if (rows.length > 0) {
-            return { id: rows[0].id, name: rows[0][coluna], tipo };
+        const { data, error } = await supabase
+            .from(tabela)
+            .select(`id, ${coluna}`)
+            .eq(coluna, nomeLimpo)
+            .eq('password', senhaLimpa)
+            .maybeSingle();
+
+        if (error) {
+            console.error(`Erro ao autenticar usuário na tabela ${tabela}:`, error.message);
+            return null;
         }
-        return null;
+
+        if (!data) {
+            return null;
+        }
+
+        return { id: data.id, name: data[coluna], tipo };
     } catch (err) {
+        console.error('Exceção capturada no login:', err);
         return null;
-    } finally {
-        await connection.end();
     }
 }

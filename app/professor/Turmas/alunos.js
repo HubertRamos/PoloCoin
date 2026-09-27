@@ -34,7 +34,7 @@ async function carregarAlunos() {
     }
 
     try {
-        const resposta = await fetch(`http://localhost:3333/turmas/${turmaId}/alunos`)
+        const resposta = await fetch(`/turmas/${turmaId}/alunos`)
         const alunos = await resposta.json()
 
         if (alunos.length === 0) {
@@ -79,11 +79,11 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
         const sessionUser = JSON.parse(sessionStorage.getItem("poloUser") || "{}")
         const pId = sessionUser.id || professorId
         console.log("[AVAL] Fetch avaliacoes — alunoId:", alunoId, "professorId:", pId)
-        const alunos = await fetch(`http://localhost:3333/turmas/${turmaId}/alunos`).then(r => r.json())
+        const alunos = await fetch(`/turmas/${turmaId}/alunos`).then(r => r.json())
         const aluno = alunos.find(a => a.id == alunoId)
         if (!aluno) { isModalOpen = false; return }
 
-        const avaliacoes = await fetch(`http://localhost:3333/avaliacoes/${alunoId}?professorId=${pId}`).then(r => r.json())
+        const avaliacoes = await fetch(`/avaliacoes/${alunoId}?professorId=${pId}`).then(r => r.json())
         console.log("[AVAL] Avaliacoes fetchadas:", avaliacoes.length, avaliacoes)
 
         // Normaliza campo data para YYYY-MM-DD (a API pode retornar Date ou ISO string)
@@ -280,7 +280,7 @@ const hoje = getDataHojeLocal()
 
                 try {
                     console.log("[AVAL] Enviando POST para /avaliacoes...");
-                    const res = await fetch("http://localhost:3333/avaliacoes", {
+                    const res = await fetch("/avaliacoes", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ alunoId, professorId: pid, categoria, valor, pontos: parseInt(btn.getAttribute("data-pontos")), observacao: "" }),
@@ -320,7 +320,7 @@ const hoje = getDataHojeLocal()
                 if (!professorId) { alert("Professor não logado."); return }
 
                 try {
-                    const res = await fetch("http://localhost:3333/avaliacoes", {
+                    const res = await fetch("/avaliacoes", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ alunoId, professorId, categoria: "observacao", valor: obs, pontos: pts, observacao: `${obs} — ${data} ${hora}` }),
@@ -360,7 +360,7 @@ async function mostrarTodasOcorrencias() {
     if (!turmaId) return
 
     try {
-        const resposta = await fetch(`http://localhost:3333/turmas/${turmaId}/avaliacoes`)
+        const resposta = await fetch(`/turmas/${turmaId}/avaliacoes`)
         const avaliacoes = await resposta.json()
 
         if (avaliacoes.length === 0) {

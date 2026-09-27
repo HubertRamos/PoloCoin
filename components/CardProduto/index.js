@@ -69,7 +69,7 @@ const coresCategoria = {
 
 export default function CardProduto(produto, onClickComprar) {
     const cor = coresCategoria[produto.categoria_nome] || coresCategoria['Outros']
-    const preco = parseFloat(produto.preco) || 0
+    const preco = parseInt(produto.custo_pontos ?? produto.preco ?? 0, 10) || 0
     const categoria = produto.categoria_nome || 'Sem categoria'
 
     const cardStyle = style.card.replace('%COR%', cor)
@@ -83,7 +83,7 @@ export default function CardProduto(produto, onClickComprar) {
                 </div>
                 <div style="text-align: right;">
                     <div style="${style.price}">
-                        R$ ${preco.toFixed(2).replace('.', ',')}
+                        🪙 ${preco}
                     </div>
                     <div style="${style.id}">ID: ${produto.id}</div>
                 </div>

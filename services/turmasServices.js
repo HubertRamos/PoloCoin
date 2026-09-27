@@ -1,11 +1,4 @@
-import mysql from 'mysql2/promise';
-
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '1478',
-    database: 'sistema_poloCoin'
-};
+import { supabase } from '../config/supabase.js';
 
 export async function criarTurma(serie, turma) {
     const serieLimpa = serie ? Number(serie) : null;
@@ -15,33 +8,44 @@ export async function criarTurma(serie, turma) {
         throw new Error('CAMPOS_VAZIOS');
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        // Verifica se a turma já existe no banco (mesma série e mesma turma, ex: 3 e 'A')
-        const [existente] = await connection.execute(
-            'SELECT id FROM turmas WHERE serie = ? AND turma = ?', 
-            [serieLimpa, turmaLimpa]
-        );
+    // Verifica se a turma já existe no banco (mesma série e mesma turma, ex: 3 e 'A')
+    const { data: existente, error: errExist } = await supabase
+        .from('turmas')
+        .select('id')
+        .eq('serie', serieLimpa)
+        .eq('turma', turmaLimpa)
+        .maybeSingle();
 
-        if (existente.length > 0) {
+    if (errExist) {
+        throw new Error(errExist.message);
+    }
+
+    if (existente) {
+        throw new Error('DUPLICADO');
+    }
+
+    // Insere se não existir
+    const { error: errInsert } = await supabase
+        .from('turmas')
+        .insert([{ serie: serieLimpa, turma: turmaLimpa }]);
+
+    if (errInsert) {
+        if (errInsert.code === '23505') {
             throw new Error('DUPLICADO');
         }
-
-        // Insere se não existir
-        const sql = 'INSERT INTO turmas (serie, turma) VALUES (?, ?)';
-        await connection.execute(sql, [serieLimpa, turmaLimpa]);
-    } finally {
-        await connection.end();
+        throw new Error(errInsert.message);
     }
 }
 
 export async function puxarTurmas() {
-    const connection = await mysql.createConnection(dbConfig);
-    try {
-        const [rows] = await connection.execute('SELECT id, serie, turma FROM turmas ORDER BY serie, turma');
-        return rows;
-    } finally {
-        await connection.end();
-    }
-}
+    const { data, error } = await supabase
+        .from('turmas')
+        .select('id, serie, turma')
+        .order('serie', { ascending: true })
+        .order('turma', { ascending: true });
 
+    if (error) {
+        throw new Error(error.message);
+    }
+    return data || [];
+}
