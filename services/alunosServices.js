@@ -55,7 +55,7 @@ export async function criarAlunoComResponsavel(turmaId, nomeAluno, nomeResponsav
         responsavelId = novoResp.id;
     }
 
-    // 3. Insere o aluno vinculado à turma e ao responsável (pode_comprar padrão: true)
+    // 3. Insere o aluno vinculado à turma e ao responsável (pode_comprar padrão: false - compras bloqueadas até liberação do responsável)
     const { error: errInsertAluno } = await supabase
         .from('alunos')
         .insert([{
@@ -63,7 +63,7 @@ export async function criarAlunoComResponsavel(turmaId, nomeAluno, nomeResponsav
             responsavel_id: responsavelId,
             nome: alunoNomeLimpo,
             password: alunoSenhaLimpa,
-            pode_comprar: true
+            pode_comprar: false
         }]);
 
     if (errInsertAluno) {

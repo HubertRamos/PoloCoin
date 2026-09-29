@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS avaliacoes (
     professor_id BIGINT NOT NULL REFERENCES professores(id) ON DELETE CASCADE,
     categoria VARCHAR(50) NOT NULL,
     valor VARCHAR(255) NOT NULL,
+    tipo VARCHAR(20) NOT NULL DEFAULT 'positiva',
     pontos INT NOT NULL DEFAULT 0,
     observacao TEXT,
     consentido BOOLEAN NOT NULL DEFAULT false,

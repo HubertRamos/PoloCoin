@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import { processarDesejoComoCompra } from './desejosServices.js';
 
 /**
  * Busca desejos pendentes de um aluno.
@@ -151,76 +152,9 @@ export async function getDesejosDosFilhos(responsavelId) {
 }
 
 /**
- * Converte um desejo em compra real.
- * Verifica se o aluno tem saldo, desconta e remove o desejo.
+ * Converte um desejo em compra real (autorizado pelo responsável).
+ * Delega para processarDesejoComoCompra para garantir movimentação para Pendentes de Entrega.
  */
-export async function comprarDesejo(alunoId, produtoId) {
-    if (!alunoId || !produtoId) {
-        throw new Error('CAMPOS_VAZIOS');
-    }
-
-    const aId = Number(alunoId);
-    const pId = Number(produtoId);
-
-    // Busca o produto
-    const { data: produto, error: errProd } = await supabase
-        .from('produtos')
-        .select('id, nome, custo_pontos')
-        .eq('id', pId)
-        .maybeSingle();
-
-    if (errProd) {
-        throw new Error(errProd.message);
-    }
-    if (!produto) {
-        throw new Error('PRODUTO_NAO_ENCONTRADO');
-    }
-
-    // Verifica e desconta pontos
-    const { data: aluno, error: errAluno } = await supabase
-        .from('alunos')
-        .select('pontos')
-        .eq('id', aId)
-        .maybeSingle();
-
-    if (errAluno) {
-        throw new Error(errAluno.message);
-    }
-    if (!aluno) {
-        throw new Error('ALUNO_NAO_ENCONTRADO');
-    }
-
-    const custo = Number(produto.custo_pontos);
-    if ((aluno.pontos ?? 0) < custo) {
-        throw new Error('SALDO_INSUFICIENTE');
-    }
-
-    const novoSaldo = (aluno.pontos ?? 0) - custo;
-
-    // Deduz pontos
-    const { error: errDeduz } = await supabase
-        .from('alunos')
-        .update({ pontos: novoSaldo })
-        .eq('id', aId);
-
-    if (errDeduz) {
-        throw new Error(errDeduz.message);
-    }
-
-    // Remove o desejo
-    const { error: errDel } = await supabase
-        .from('desejos')
-        .delete()
-        .eq('aluno_id', aId)
-        .eq('produto_id', pId);
-
-    if (errDel) {
-        throw new Error(errDel.message);
-    }
-
-    return {
-        produto: { nome: produto.nome, custo_pontos: custo },
-        saldo_restante: novoSaldo,
-        message: 'Pedido realizado com sucesso!'
-    };
+export async function comprarDesejo(alunoId, produtoId, autorizadoPor = null) {
+    return processarDesejoComoCompra(alunoId, produtoId, autorizadoPor);
 }

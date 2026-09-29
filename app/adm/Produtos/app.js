@@ -2,6 +2,7 @@ import Form from '../../../components/Form/index.js'
 import DashBoard from '../../../components/DashBoard/index.js'
 import Header from '../../../components/Header/index.js'
 import { linksHeader } from '../constLinks.js'
+import UploadFile from '../../../components/UploadFile/index.js'
 
 const root = document.getElementById('root')
 
@@ -164,6 +165,9 @@ function abrirModalAdd() {
                 categoriaOptions
             )}
 
+
+            ${UploadFile()}
+
             <p id="msg" style="text-align: center; font-size: 12px; min-height: 18px; margin: 8px 0 0;"></p>
         </main>
 
@@ -239,6 +243,75 @@ function abrirModalAdd() {
             }
         })
     }
+
+    const fileInput = document.getElementById('csv-file')
+
+if (fileInput) {
+    fileInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0]
+        if (!file) return
+
+        const reader = new FileReader()
+
+        reader.onload = async function(e) {
+            const conteudo = e.target.result
+            const linhas = conteudo.split('\n')
+
+            let cadastrados = 0
+            let ignorados = 0
+
+            for (const linha of linhas) {
+                if (!linha.trim()) continue
+
+                const colunas = linha.split(',')
+
+                if (colunas.length < 3) {
+                    ignorados++
+                    continue
+                }
+
+                const nome = colunas[0].trim()
+                const pontosValor = parseInt(colunas[1].trim())
+                const categoria = colunas[2].trim()
+
+                try {
+                    const resposta = await fetch('/produtos', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+    nome,
+    custo_pontos: pontosValor,
+    preco: pontosValor,
+    categoria
+})
+                    })
+
+                    if (resposta.ok)
+                        cadastrados++
+                    else
+                        ignorados++
+
+                } catch {
+                    ignorados++
+                }
+            }
+
+            alert(
+                `Importação concluída!\n\n` +
+                `Cadastrados: ${cadastrados}\n` +
+                `Ignorados: ${ignorados}`
+            )
+
+            fileInput.value = ''
+            await carregarDados()
+            Render()
+        }
+
+        reader.readAsText(file)
+    })
+}
 }
 
 async function Render() {

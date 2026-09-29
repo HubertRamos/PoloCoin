@@ -50,7 +50,22 @@ export async function processarDesejoComoCompra(alunoId, produtoId, autorizadoPo
     const aId = Number(alunoId);
     const pId = Number(produtoId);
 
-    // Busca o produto
+    // 1. Verifica se o desejo realmente existe na tabela de desejos
+    const { data: desejoExistente, error: errDesejo } = await supabase
+        .from('desejos')
+        .select('id')
+        .eq('aluno_id', aId)
+        .eq('produto_id', pId)
+        .maybeSingle();
+
+    if (errDesejo) {
+        throw new Error(errDesejo.message);
+    }
+    if (!desejoExistente) {
+        throw new Error('DESEJO_NAO_ENCONTRADO');
+    }
+
+    // 2. Busca o produto
     const { data: produto, error: errProd } = await supabase
         .from('produtos')
         .select('id, nome, custo_pontos')
@@ -64,7 +79,7 @@ export async function processarDesejoComoCompra(alunoId, produtoId, autorizadoPo
         throw new Error('PRODUTO_NAO_ENCONTRADO');
     }
 
-    // Busca o aluno
+    // 3. Busca o aluno e confere saldo
     const { data: aluno, error: errAluno } = await supabase
         .from('alunos')
         .select('id, pontos, turma_id')
@@ -78,14 +93,14 @@ export async function processarDesejoComoCompra(alunoId, produtoId, autorizadoPo
         throw new Error('ALUNO_NAO_ENCONTRADO');
     }
 
-    const custo = Number(produto.custo_pontos);
+    const custo = Number(produto.custo_pontos || 0);
     if ((aluno.pontos ?? 0) < custo) {
         throw new Error('SALDO_INSUFICIENTE');
     }
 
     const novoSaldo = (aluno.pontos ?? 0) - custo;
 
-    // Deduz pontos
+    // 4. Deduz pontos do aluno
     const { error: errDeduz } = await supabase
         .from('alunos')
         .update({ pontos: novoSaldo })
@@ -95,7 +110,7 @@ export async function processarDesejoComoCompra(alunoId, produtoId, autorizadoPo
         throw new Error(errDeduz.message);
     }
 
-    // Remove o desejo
+    // 5. Remove o desejo da Lista de Desejos
     const { error: errDel } = await supabase
         .from('desejos')
         .delete()
@@ -106,8 +121,8 @@ export async function processarDesejoComoCompra(alunoId, produtoId, autorizadoPo
         throw new Error(errDel.message);
     }
 
-    // Registra a compra na tabela de compras (entregue: false por padrão)
-    const { error: errCompra } = await supabase
+    // 6. Registra a compra na tabela de compras (fila de entrega: entregue = false)
+    const { data: compraCriada, error: errCompra } = await supabase
         .from('compras')
         .insert([{
             aluno_id: aId,
@@ -115,13 +130,16 @@ export async function processarDesejoComoCompra(alunoId, produtoId, autorizadoPo
             custo_pontos: custo,
             autorizado_por: autorizadoPor ? Number(autorizadoPor) : null,
             entregue: false
-        }]);
+        }])
+        .select('id')
+        .single();
 
     if (errCompra) {
         throw new Error(errCompra.message);
     }
 
     return {
+        compra_id: compraCriada?.id,
         produto: { nome: produto.nome, custo_pontos: custo },
         saldo_restante: novoSaldo,
         message: 'Pedido realizado com sucesso!'

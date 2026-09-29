@@ -1,7 +1,18 @@
 /**
- * Componente de consentimento passo-a-passo para ocorrências
- * Mostra uma ocorrência por vez com navegação anterior/próxima
+ * Componente de consentimento em 2 etapas para ocorrências negativas:
+ * 
+ * ETAPA 1 (Popup 1):
+ * - Mostra ocorrências passo a passo com navegação anterior/próxima e checkbox individual.
+ * - Exibe: Data, Descrição, PoloCoins removidos, Professor responsável.
+ * 
+ * ETAPA 2 (Popup 2 - Novo):
+ * - Popup de Ciência e Confirmação consolidado de todas as ocorrências negativas.
+ * - Exibe aviso de destaque e leitura recomendada.
+ * - Lista todas as ocorrências com Data, Descrição, PoloCoins removidos e Professor responsável.
+ * - Checkbox obrigatório: "Declaro que li e estou ciente das ocorrências negativas apresentadas acima."
+ * - Botões: [ Voltar ] (retorna para o Popup 1) e [ Confirmar Ciência ] (habilitado após checkbox).
  */
+
 const style = {
     container: `
         display: flex;
@@ -16,7 +27,7 @@ const style = {
         padding: 28px 30px;
         border-radius: 16px;
         box-shadow: 0 8px 30px rgba(0,0,0,0.08);
-        max-width: 560px;
+        max-width: 580px;
         width: 100%;
         border: 1px solid #e2e8f0;
     `,
@@ -133,7 +144,9 @@ const style = {
     `,
     details: `
         display: flex;
-        gap: 20px;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
         font-size: 13px;
         color: #64748b;
         margin-bottom: 16px;
@@ -215,8 +228,8 @@ const style = {
         text-align: center;
         padding: 40px 20px;
         color: #94a3b8;
-    `,
-}
+    `
+};
 
 /**
  * Retorna o ícone baseado na categoria
@@ -227,9 +240,9 @@ function getIcon(categoria) {
         'entrega': '📦',
         'comprometimento': '🎯',
         'social': '🤝',
-        'Geral': '📋',
-    }
-    return icons[categoria?.toLowerCase()] || '📌'
+        'Geral': '📋'
+    };
+    return icons[categoria?.toLowerCase()] || '📌';
 }
 
 /**
@@ -244,16 +257,16 @@ function getBadgeColor(valor) {
         'isolado':       '#a855f7',
         'desinteressado':'#64748b',
         'indiferente':   '#64748b',
-        'atrasado':      '#eab308',
-    }
-    return cores[valor?.toLowerCase()] || '#3b82f6'
+        'atrasado':      '#eab308'
+    };
+    return cores[valor?.toLowerCase()] || '#3b82f6';
 }
 
 /**
  * Formata data e hora
  */
 function formatarDataHora(data, hora) {
-    if (!data) return 'Data não informada'
+    if (!data) return 'Data não informada';
     try {
         return new Date(data + (hora ? 'T' + hora : 'T00:00'))
             .toLocaleString('pt-BR', { 
@@ -262,17 +275,45 @@ function formatarDataHora(data, hora) {
                 year: 'numeric', 
                 hour: '2-digit', 
                 minute: '2-digit' 
-            })
+            });
     } catch {
-        return `${data} ${hora || ''}`
+        return `${data} ${hora || ''}`;
     }
 }
 
 /**
- * Componente principal - exibe ocorrências uma por uma
- * Recebe estado externo para sincronizar com gerenciarConsentimento
+ * Formata data simples (DD/MM/YYYY)
  */
-export default function OcorrenciaConsentimento({ocorrencias, onFinish, indiceAtual = 0, consentimentos = {}}) {
+function formatarDataSimples(data, hora) {
+    if (!data) return 'Data não informada';
+    try {
+        const d = new Date(data + (hora ? 'T' + hora : 'T00:00'));
+        if (isNaN(d.getTime())) return data;
+        return d.toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    } catch {
+        return data;
+    }
+}
+
+/**
+ * Formata exibição dos PoloCoins removidos
+ */
+function formatarPontosRemovidos(pontos) {
+    if (pontos === null || pontos === undefined) return '0 PoloCoins';
+    const num = Number(pontos);
+    if (num < 0) return `${num} PoloCoins`;
+    if (num > 0) return `-${num} PoloCoins`;
+    return '0 PoloCoins';
+}
+
+/**
+ * POPUP 1: Componente de visualização passo-a-passo
+ */
+export default function OcorrenciaConsentimento({ ocorrencias, indiceAtual = 0, consentimentos = {} }) {
     if (!ocorrencias || ocorrencias.length === 0) {
         return `
             <div style="${style.container}">
@@ -302,31 +343,32 @@ export default function OcorrenciaConsentimento({ocorrencias, onFinish, indiceAt
                     </div>
                 </div>
             </div>
-        `
+        `;
     }
 
-    const idx = indiceAtual
-    const cons = consentimentos
-    const oc = ocorrencias[idx]
-    const total = ocorrencias.length
-    const atual = idx + 1
-    const checkId = `check-${oc.avaliacao_id}`
-    const checked = cons[oc.avaliacao_id] ? 'checked' : ''
+    const idx = indiceAtual;
+    const cons = consentimentos;
+    const oc = ocorrencias[idx];
+    const total = ocorrencias.length;
+    const atual = idx + 1;
+    const checkId = `check-${oc.avaliacao_id}`;
+    const checked = cons[oc.avaliacao_id] ? 'checked' : '';
 
-    const canPrev = idx > 0
-    const isLast = idx === total - 1
-    const canFinish = isLast && cons[oc.avaliacao_id]
+    const canPrev = idx > 0;
+    const isLast = idx === total - 1;
+    const allConsented = ocorrencias.every(o => cons[o.avaliacao_id]);
+    const canFinish = isLast && allConsented;
 
     return `
-        <div style="${style.container}">
+        <div style="${style.container}" role="dialog" aria-modal="true" aria-labelledby="popup1-title">
             <div style="${style.popup}">
                 <!-- Cabeçalho -->
                 <div style="text-align: center; margin-bottom: 16px;">
                     <div style="${style.headerCircle}">
-                        <span style="font-size: 24px;">👤</span>
+                        <span style="font-size: 24px;">📋</span>
                     </div>
-                    <h2 style="${style.title}">
-                        Ocorrência ${atual} de ${total}
+                    <h2 id="popup1-title" style="${style.title}">
+                        Ocorrência Negativa ${atual} de ${total}
                     </h2>
                     <p style="${style.subtitle}">
                         Leia cuidadosamente e confirme que concorda em receber esta informação.
@@ -341,7 +383,7 @@ export default function OcorrenciaConsentimento({ocorrencias, onFinish, indiceAt
                     </span>
                 </div>
 
-                <!-- Cards com barras indicadoras -->
+                <!-- Indicadores de navegação -->
                 <div style="display: flex; gap: 6px; margin-bottom: 16px; justify-content: center;">
                     ${ocorrencias.map((_, i) => `
                         <div style="
@@ -371,7 +413,7 @@ export default function OcorrenciaConsentimento({ocorrencias, onFinish, indiceAt
                             </div>
                         </div>
                         <span style="${style.dateBadge}">
-                            ${formatarDataHora(oc.data, oc.hora)}
+                            📅 ${formatarDataHora(oc.data, oc.hora)}
                         </span>
                     </div>
 
@@ -381,19 +423,23 @@ export default function OcorrenciaConsentimento({ocorrencias, onFinish, indiceAt
                         <span style="${style.badgeText}">${oc.valor || '—'}</span>
                     </div>
 
-                    <!-- Observação -->
+                    <!-- Observação / Descrição -->
                     <div style="${style.observation}">
-                        <p style="${style.obsText}">"${oc.observacao || 'Sem observação adicional'}"</p>
+                        <p style="${style.obsText}">"${oc.observacao || oc.valor || 'Sem observação adicional'}"</p>
                     </div>
 
-                    <!-- Detalhes -->
+                    <!-- Detalhes: PoloCoins removidos e Professor responsável -->
                     <div style="${style.details}">
-                        <span><strong>Pontos:</strong> ${oc.pontos ?? '—'}</span>
-                        <span><strong>Valor:</strong> ${oc.valor || '—'}</span>
+                        <span style="color: #dc2626; font-weight: 600;">
+                            🪙 ${formatarPontosRemovidos(oc.pontos)}
+                        </span>
+                        <span style="color: #64748b;">
+                            Registrada por: <strong>${oc.professor_nome || 'Professor'}</strong>
+                        </span>
                     </div>
                 </div>
 
-                <!-- Checkbox de consentimento -->
+                <!-- Checkbox de consentimento da ocorrência atual -->
                 <label id="${checkId}-label"
                     style="${checked ? style.labelContainerChecked : style.labelContainer}"
                 >
@@ -424,7 +470,7 @@ export default function OcorrenciaConsentimento({ocorrencias, onFinish, indiceAt
                             ${canFinish ? '' : 'disabled'}
                             style="${style.navBtn} ${style.navFinish} ${canFinish ? '' : 'opacity: 0.5; cursor: not-allowed;'}"
                         >
-                            ✓ Finalizar
+                            Confirmar Ocorrências ▶
                         </button>
                     ` : `
                         <button id="btn-proximo"
@@ -437,128 +483,327 @@ export default function OcorrenciaConsentimento({ocorrencias, onFinish, indiceAt
                 </div>
             </div>
         </div>
-    `
+    `;
 }
 
 /**
- * Gerencia o fluxo de consentimento (estado e navegação)
+ * POPUP 2: Confirmação de Ciência das Ocorrências
+ */
+export function PopupConfirmacaoCiencia({ ocorrencias, cienciaConfirmada = false }) {
+    const total = ocorrencias.length;
+
+    return `
+        <div style="${style.container}" role="dialog" aria-modal="true" aria-labelledby="popup2-title">
+            <div style="${style.popup}; max-width: 620px;">
+                <!-- Cabeçalho com Alerta Visual -->
+                <div style="text-align: center; margin-bottom: 16px;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; background: #fef2f2; border: 2px solid #fecaca; border-radius: 50%; margin-bottom: 12px;">
+                        <span style="font-size: 26px;">⚠️</span>
+                    </div>
+                    <h2 id="popup2-title" style="color: #991b1b; margin: 0 0 6px 0; font-size: 20px; font-weight: 700;">
+                        Confirmação de Ciência das Ocorrências
+                    </h2>
+                </div>
+
+                <!-- Texto de Destaque -->
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 14px 16px; margin-bottom: 18px;">
+                    <p style="margin: 0 0 6px 0; font-size: 13.5px; font-weight: 600; color: #92400e; line-height: 1.5;">
+                        Você está confirmando que tomou conhecimento das ocorrências negativas registradas para este aluno.
+                    </p>
+                    <p style="margin: 0 0 6px 0; font-size: 13px; color: #b45309; line-height: 1.4;">
+                        Recomendamos a leitura cuidadosa de cada ocorrência antes de prosseguir.
+                    </p>
+                    <p style="margin: 0; font-size: 12px; color: #78350f; line-height: 1.4;">
+                        Esta confirmação indica apenas que você visualizou as informações apresentadas.
+                    </p>
+                </div>
+
+                <!-- Subtítulo da lista -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-size: 13px; font-weight: 700; color: #1e293b;">
+                        📋 Ocorrências a reconhecer (${total})
+                    </span>
+                    <span style="font-size: 12px; color: #64748b;">
+                        Role para revisar todas
+                    </span>
+                </div>
+
+                <!-- Listagem Consolidada de Ocorrências Negativas -->
+                <div id="lista-ocorrencias-ciencia" style="max-height: 260px; overflow-y: auto; padding-right: 4px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px;">
+                    ${ocorrencias.map(oc => `
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; border-radius: 8px; padding: 12px 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px;">
+                                <span style="font-size: 12px; font-weight: 600; color: #64748b;">
+                                    📅 ${formatarDataSimples(oc.data, oc.hora)}
+                                </span>
+                                <span style="font-size: 12px; font-weight: 700; color: #dc2626;">
+                                    🪙 ${formatarPontosRemovidos(oc.pontos)}
+                                </span>
+                            </div>
+                            <div style="font-size: 13.5px; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                                ${oc.observacao || oc.valor || 'Ocorrência registrada'}
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: #64748b; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0;">
+                                <span>
+                                    Aluno: <strong>${oc.aluno_nome || 'Aluno'}</strong> ${oc.serie ? `(${oc.serie}º${oc.turma || ''})` : ''}
+                                </span>
+                                <span>
+                                    Registrada por: <strong>${oc.professor_nome || 'Professor'}</strong>
+                                </span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <!-- Confirmação Obrigatória -->
+                <label id="label-ciencia-obrigatoria"
+                    style="
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        cursor: pointer;
+                        padding: 14px 16px;
+                        background: ${cienciaConfirmada ? '#dcfce7' : '#f8fafc'};
+                        border: 2px solid ${cienciaConfirmada ? '#86efac' : '#cbd5e1'};
+                        border-radius: 10px;
+                        transition: all 0.2s;
+                        margin-bottom: 20px;
+                    "
+                >
+                    <input type="checkbox"
+                        id="check-ciencia-obrigatoria"
+                        ${cienciaConfirmada ? 'checked' : ''}
+                        style="width: 20px; height: 20px; accent-color: #10b981; cursor: pointer;"
+                    >
+                    <span style="font-size: 13.5px; font-weight: 600; color: #1e293b; user-select: none;">
+                        Declaro que li e estou ciente das ocorrências negativas apresentadas acima.
+                    </span>
+                </label>
+
+                <!-- Botões de Ação -->
+                <div style="display: flex; gap: 12px;">
+                    <button id="btn-voltar-ciencia"
+                        style="
+                            flex: 1;
+                            padding: 13px;
+                            border-radius: 10px;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            background: white;
+                            border: 1.5px solid #cbd5e1;
+                            color: #475569;
+                            transition: all 0.2s;
+                        "
+                    >
+                        ← Voltar
+                    </button>
+                    <button id="btn-confirmar-ciencia"
+                        ${cienciaConfirmada ? '' : 'disabled'}
+                        style="
+                            flex: 1.5;
+                            padding: 13px;
+                            border-radius: 10px;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: ${cienciaConfirmada ? 'pointer' : 'not-allowed'};
+                            background: #10B981;
+                            border: none;
+                            color: white;
+                            opacity: ${cienciaConfirmada ? '1' : '0.5'};
+                            transition: all 0.2s;
+                        "
+                    >
+                        Confirmar Ciência ✓
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Gerencia o fluxo completo de consentimento (Etapa 1: individual -> Etapa 2: confirmação de ciência)
  */
 export function gerenciarConsentimento(root, ocorrencias, onFinish) {
-    let indiceAtual = 0
-    let consentimentos = {}
+    if (!ocorrencias || ocorrencias.length === 0) {
+        onFinish();
+        return;
+    }
+
+    let etapa = 1; // 1 = Popup 1 (navegação passo a passo), 2 = Popup 2 (Ciência e Confirmação)
+    let indiceAtual = 0;
+    let consentimentos = {};
+    let cienciaConfirmada = false;
 
     function renderizar() {
+        if (etapa === 1) {
+            renderizarPopup1();
+        } else {
+            renderizarPopup2();
+        }
+    }
+
+    function renderizarPopup1() {
         const popupHtml = OcorrenciaConsentimento({ 
             ocorrencias, 
-            indiceAtual: indiceAtual,
-            consentimentos: consentimentos,
-        })
+            indiceAtual,
+            consentimentos
+        });
 
-        root.innerHTML = popupHtml
+        root.innerHTML = popupHtml;
 
-        const btnProximo = document.getElementById('btn-proximo')
-        const btnAnterior = document.getElementById('btn-anterior')
-        const btnFinalizar = document.getElementById('btn-finalizar')
-        const mensagem = document.getElementById('mensagem')
-        const checkId = `check-${ocorrencias[indiceAtual].avaliacao_id}`
-        const check = document.getElementById(checkId)
-        const label = document.getElementById(`${checkId}-label`)
+        const btnProximo = document.getElementById('btn-proximo');
+        const btnAnterior = document.getElementById('btn-anterior');
+        const btnFinalizar = document.getElementById('btn-finalizar');
+        const mensagem = document.getElementById('mensagem');
+        const checkId = `check-${ocorrencias[indiceAtual].avaliacao_id}`;
+        const check = document.getElementById(checkId);
+        const label = document.getElementById(`${checkId}-label`);
 
-        // Evento checkbox
+        // Checkbox da ocorrência atual
         if (check) {
             check.addEventListener('change', () => {
-                const avaliacao_id = parseInt(check.dataset.avaliacaoId)
+                const avaliacao_id = parseInt(check.dataset.avaliacaoId);
                 
                 if (check.checked) {
-                    consentimentos[avaliacao_id] = true
-                    label.style.background = '#dcfce7'
-                    label.style.borderColor = '#86efac'
-                    mensagem.textContent = ''
+                    consentimentos[avaliacao_id] = true;
+                    if (label) {
+                        label.style.background = '#dcfce7';
+                        label.style.borderColor = '#86efac';
+                    }
+                    if (mensagem) mensagem.textContent = '';
                 } else {
-                    delete consentimentos[avaliacao_id]
-                    label.style.background = '#eff6ff'
-                    label.style.borderColor = '#bfdbfe'
-                }
-
-                // Re-renderiza para atualizar o estado do botão finalizar
-                if (indiceAtual === ocorrencias.length - 1) {
-                    const btnFin = document.getElementById('btn-finalizar')
-                    if (btnFin) {
-                        const allConsented = ocorrencias.every(oc => consentimentos[oc.avaliacao_id])
-                        btnFin.disabled = !allConsented
-                        btnFin.style.opacity = allConsented ? '1' : '0.5'
-                        btnFin.style.cursor = allConsented ? 'pointer' : 'not-allowed'
-
-                        if (allConsented) {
-                            mensagem.textContent = '✓ Todas as ocorrências consentidas. Pode finalizar.'
-                            mensagem.style.color = '#10B981'
-                        } else {
-                            mensagem.textContent = ''
-                        }
+                    delete consentimentos[avaliacao_id];
+                    if (label) {
+                        label.style.background = '#eff6ff';
+                        label.style.borderColor = '#bfdbfe';
                     }
                 }
 
-                // Re-renderiza para refletir o checkbox marcado/desmarcado
-                // (pois o estilo do label é injetado via innerHTML)
-                renderizar()
-            })
+                // Re-renderiza para atualizar estado dos botões e da barra
+                renderizar();
+            });
         }
 
-        // Botão próximo
+        // Navegação Próximo
         if (btnProximo) {
             btnProximo.addEventListener('click', () => {
                 if (indiceAtual < ocorrencias.length - 1) {
-                    indiceAtual++
-                    renderizar()
+                    indiceAtual++;
+                    renderizar();
                 }
-            })
+            });
         }
 
-        // Botão anterior
+        // Navegação Anterior
         if (btnAnterior) {
             btnAnterior.addEventListener('click', () => {
                 if (indiceAtual > 0) {
-                    indiceAtual--
-                    renderizar()
+                    indiceAtual--;
+                    renderizar();
                 }
-            })
+            });
         }
 
-        // Botão finalizar
+        // Botão Finalizar / Avançar para Popup 2
         if (btnFinalizar) {
             btnFinalizar.addEventListener('click', () => {
-                if (todasConsentidas()) {
-                    // Envia para o servidor as avaliações que foram consentidas
-                    const idsParaConsentir = ocorrencias
-                        .filter(oc => consentimentos[oc.avaliacao_id])
-                        .map(oc => oc.avaliacao_id)
-
-                    fetch('/responsavel/consentir-avaliacoes', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ avaliacoes_ids: idsParaConsentir })
-                    }).then(r => r.json()).then(dados => {
-                        console.log('Consentimento salvo:', dados.message)
-                    }).catch(e => console.error('Erro ao salvar consentimento:', e))
-
-                    root.innerHTML = ''
-                    onFinish()
+                const allConsented = ocorrencias.every(oc => consentimentos[oc.avaliacao_id]);
+                if (allConsented) {
+                    // Avança para o Popup 2 (Confirmação de Ciência)
+                    etapa = 2;
+                    renderizar();
                 }
-            })
+            });
         }
 
         // Navegação por dots
         window.navegarOcorrencia = function(indice) {
             if (indice >= 0 && indice < ocorrencias.length) {
-                indiceAtual = indice
-                renderizar()
+                indiceAtual = indice;
+                renderizar();
             }
+        };
+
+        // Suporte para fechar em caso de tela sem ocorrências
+        const btnEntrar = document.getElementById('btn-entrar');
+        if (btnEntrar) {
+            btnEntrar.addEventListener('click', () => {
+                root.innerHTML = '';
+                onFinish();
+            });
         }
     }
 
-    function todasConsentidas() {
-        return ocorrencias.every(oc => consentimentos[oc.avaliacao_id])
+    function renderizarPopup2() {
+        const popupHtml = PopupConfirmacaoCiencia({
+            ocorrencias,
+            cienciaConfirmada
+        });
+
+        root.innerHTML = popupHtml;
+
+        const checkCiencia = document.getElementById('check-ciencia-obrigatoria');
+        const labelCiencia = document.getElementById('label-ciencia-obrigatoria');
+        const btnConfirmar = document.getElementById('btn-confirmar-ciencia');
+        const btnVoltar = document.getElementById('btn-voltar-ciencia');
+
+        // Checkbox de confirmação explícita
+        if (checkCiencia) {
+            checkCiencia.focus();
+            checkCiencia.addEventListener('change', () => {
+                cienciaConfirmada = checkCiencia.checked;
+
+                if (cienciaConfirmada) {
+                    labelCiencia.style.background = '#dcfce7';
+                    labelCiencia.style.borderColor = '#86efac';
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.style.opacity = '1';
+                    btnConfirmar.style.cursor = 'pointer';
+                } else {
+                    labelCiencia.style.background = '#f8fafc';
+                    labelCiencia.style.borderColor = '#cbd5e1';
+                    btnConfirmar.disabled = true;
+                    btnConfirmar.style.opacity = '0.5';
+                    btnConfirmar.style.cursor = 'not-allowed';
+                }
+            });
+        }
+
+        // Botão Voltar (retorna ao Popup 1)
+        if (btnVoltar) {
+            btnVoltar.addEventListener('click', () => {
+                etapa = 1;
+                renderizar();
+            });
+        }
+
+        // Botão Confirmar Ciência (envia os consentimentos e finaliza)
+        if (btnConfirmar) {
+            btnConfirmar.addEventListener('click', async () => {
+                if (!cienciaConfirmada) return;
+
+                btnConfirmar.disabled = true;
+                btnConfirmar.textContent = '⏳ Salvando...';
+
+                try {
+                    const idsParaConsentir = ocorrencias.map(oc => oc.avaliacao_id);
+
+                    await fetch('/responsavel/consentir-avaliacoes', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ avaliacoes_ids: idsParaConsentir })
+                    });
+                } catch (e) {
+                    console.error('Erro ao salvar consentimento:', e);
+                }
+
+                root.innerHTML = '';
+                onFinish();
+            });
+        }
     }
 
-    renderizar()
+    renderizar();
 }

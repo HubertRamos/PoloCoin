@@ -14,6 +14,8 @@ import { getSaldoPontos, deduzirPontos } from './services/pontosServices.js';
 import { puxarTodosProdutos, criarProduto, puxarTodasCategorias, garantirCategoriasBasicas, criarCategoriaSeNecesaria } from './services/produtosServices.js';
 import { adicionarDesejo, processarDesejoComoCompra, puxarDesejosDoAluno } from './services/desejosServices.js';
 import { getFilhosComSaldos, getDesejosDosFilhos } from './services/responsavelDesejosServices.js';
+import { iniciarAgendadorRetencao, executarLimpezaGeral, obterStatusRetencao } from './services/dataRetentionService.js';
+import { gerarRelatorioAluno, gerarRelatorioTurma } from './services/relatoriosServices.js';
 
 const app = express();
 app.use(cors());
@@ -233,9 +235,17 @@ app.post('/professor/turmas/desvincular', async (req, res) => {
 
 // --- Rotas de Avaliações ---
 app.post('/avaliacoes', async (req, res) => {
-    const { alunoId, professorId, categoria, valor, pontos, observacao } = req.body;
+    const { alunoId, professorId, categoria, valor, pontos, observacao, tipo } = req.body;
     try {
-        const avaliacao = await criarAvaliacao(alunoId, professorId, categoria, valor, pontos || 0, observacao || '');
+        const avaliacao = await criarAvaliacao(
+            alunoId,
+            professorId,
+            categoria,
+            valor,
+            pontos !== undefined ? pontos : valor,
+            observacao || '',
+            tipo || 'positiva'
+        );
         return res.status(201).json({ message: 'Avaliação registrada com sucesso!', avaliacao });
     } catch (error) {
         if (error.message === 'CAMPOS_VAZIOS') {
@@ -248,9 +258,8 @@ app.post('/avaliacoes', async (req, res) => {
 
 app.get('/avaliacoes/:alunoId', async (req, res) => {
     const { alunoId } = req.params;
-    const { professorId } = req.query;
     try {
-        const avaliacoes = await puxarAvaliacoesPorAluno(alunoId, professorId || null);
+        const avaliacoes = await puxarAvaliacoesPorAluno(alunoId);
         return res.status(200).json(avaliacoes);
     } catch (error) {
         console.error('ERRO AO BUSCAR AVALIAÇÕES:', error);
@@ -267,6 +276,44 @@ app.get('/turmas/:turmaId/avaliacoes', async (req, res) => {
     } catch (error) {
         console.error('ERRO AO BUSCAR AVALIAÇÕES DA TURMA:', error);
         return res.status(500).json({ error: 'Erro ao buscar avaliações da turma.' });
+    }
+});
+
+// --- Rotas de Relatórios de Ocorrências (PDF / Impressão) ---
+app.get('/relatorios/aluno/:alunoId', async (req, res) => {
+    const { alunoId } = req.params;
+    const { dataInicio, dataFim, tipo, ordem } = req.query;
+    try {
+        const relatorio = await gerarRelatorioAluno({
+            alunoId,
+            dataInicio: dataInicio || null,
+            dataFim: dataFim || null,
+            tipo: tipo || 'todas',
+            ordem: ordem || 'recentes'
+        });
+        return res.status(200).json(relatorio);
+    } catch (error) {
+        console.error('ERRO AO GERAR RELATÓRIO DO ALUNO:', error);
+        return res.status(500).json({ error: error.message || 'Erro ao gerar relatório do aluno.' });
+    }
+});
+
+app.get('/relatorios/turma/:turmaId', async (req, res) => {
+    const { turmaId } = req.params;
+    const { alunoId, dataInicio, dataFim, tipo, ordem } = req.query;
+    try {
+        const relatorio = await gerarRelatorioTurma({
+            turmaId,
+            alunoId: alunoId || null,
+            dataInicio: dataInicio || null,
+            dataFim: dataFim || null,
+            tipo: tipo || 'todas',
+            ordem: ordem || 'recentes'
+        });
+        return res.status(200).json(relatorio);
+    } catch (error) {
+        console.error('ERRO AO GERAR RELATÓRIO DA TURMA:', error);
+        return res.status(500).json({ error: error.message || 'Erro ao gerar relatório da turma.' });
     }
 });
 
@@ -358,89 +405,23 @@ app.post('/aluno/comprar', async (req, res) => {
         return res.status(400).json({ error: 'Dados incompletos.' });
     }
     try {
-        const alunoIdNum = Number(aluno_id);
-        const prodIdNum = Number(produto_id);
-
-        // Verifica se o aluno pode comprar (liberado + sem ocorrências pendentes)
-        const { data: aluno, error: errAluno } = await supabase
-            .from('alunos')
-            .select('pode_comprar')
-            .eq('id', alunoIdNum)
-            .maybeSingle();
-
-        if (errAluno) {
-            throw new Error(errAluno.message);
-        }
-        if (!aluno) {
-            return res.status(404).json({ error: 'Aluno não encontrado.' });
-        }
-
-        const podeComprar = aluno.pode_comprar === true || aluno.pode_comprar === 1;
-        if (!podeComprar) {
-            return res.status(403).json({ error: 'Compras bloqueadas pelo responsável. Adicione o produto aos desejos.' });
-        }
-
-        // Verifica ocorrências não consentidas
-        const valoresNegativos = ['bagunça','desmotivado','não entregou','conflituante','isolado','desinteressado','indiferente','atrasado'];
-        const { data: ocorrencias, error: errOc } = await supabase
-            .from('avaliacoes')
-            .select('id, pontos, valor')
-            .eq('aluno_id', alunoIdNum)
-            .eq('consentido', false);
-
-        if (errOc) {
-            throw new Error(errOc.message);
-        }
-
-        const temOcorrencias = (ocorrencias || []).some(
-            av => (av.pontos !== null && av.pontos <= 10) || valoresNegativos.includes(av.valor)
-        );
-
-        if (temOcorrencias) {
-            return res.status(403).json({ error: 'Você tem ocorrências pendentes de consentimento do seu responsável. Não é possível realizar compras enquanto elas não forem resolvidas.' });
-        }
-
-        const { data: produto, error: errProd } = await supabase
-            .from('produtos')
-            .select('id, nome, custo_pontos')
-            .eq('id', prodIdNum)
-            .maybeSingle();
-
-        if (errProd) {
-            throw new Error(errProd.message);
-        }
-        if (!produto) {
-            return res.status(404).json({ error: 'Produto não encontrado.' });
-        }
-
-        const novoSaldo = await deduzirPontos(alunoIdNum, produto.custo_pontos);
-
-        // Registra a compra na tabela de compras (entregue: false)
-        const { error: errCompra } = await supabase
-            .from('compras')
-            .insert([{
-                aluno_id: alunoIdNum,
-                produto_id: prodIdNum,
-                custo_pontos: produto.custo_pontos,
-                autorizado_por: null,
-                entregue: false
-            }]);
-
-        if (errCompra) {
-            throw new Error(errCompra.message);
-        }
-
-        return res.status(200).json({
-            message: 'Pedido realizado com sucesso!',
-            produto: { nome: produto.nome, custo_pontos: produto.custo_pontos },
-            saldo_restante: novoSaldo
-        });
+        const { processarCarrinho } = await import('./services/carrinhoServices.js');
+        const resultado = await processarCarrinho(aluno_id, [{ id: produto_id, quantidade: 1 }]);
+        return res.status(200).json(resultado);
     } catch (error) {
         if (error.message === 'SALDO_INSUFICIENTE') {
-            return res.status(400).json({ error: 'Saldo insuficiente para esta compra.' });
+            return res.status(400).json({
+                error: `Saldo insuficiente para esta compra. Faltam 🪙 ${error.falta ?? 'alguns'} PoloCoins.`,
+                falta: error.falta,
+                saldoAtual: error.saldoAtual,
+                totalPontos: error.totalPontos
+            });
+        }
+        if (error.message === 'OCORRENCIAS_PENDENTES') {
+            return res.status(403).json({ error: 'Você tem ocorrências pendentes de consentimento do seu responsável. Resolva primeiro antes de finalizar pedidos.' });
         }
         console.error('ERRO AO REALIZAR PEDIDO:', error);
-        return res.status(500).json({ error: 'Erro ao processar pedido.' });
+        return res.status(500).json({ error: error.message || 'Erro ao processar pedido.' });
     }
 });
 
@@ -449,27 +430,26 @@ app.post('/aluno/comprar-carrinho', async (req, res) => {
     try {
         const { aluno_id, produtos } = req.body;
         if (!aluno_id || !Array.isArray(produtos) || produtos.length === 0) {
-            return res.status(400).json({ error: 'Dados inválidos.' });
+            return res.status(400).json({ error: 'Dados inválidos ou carrinho vazio.' });
         }
         const { processarCarrinho } = await import('./services/carrinhoServices.js');
-        const resultado = await processarCarrinho(aluno_id, produtos.map(p => p.id));
-        if (resultado.erros.length > 0 && resultado.comprados.length === 0) {
-            return res.status(400).json({ error: resultado.erros[0].erro, erros: resultado.erros });
-        }
-        return res.status(200).json({
-            comprados: resultado.comprados,
-            erros: resultado.erros,
-            saldo_restante: resultado.saldo_restante
-        });
+        const resultado = await processarCarrinho(aluno_id, produtos);
+
+        return res.status(200).json(resultado);
     } catch (e) {
         console.error('ERRO AO PROCESSAR CARRINHO:', e);
-        if (e.message === 'BLOQUEADO_PELO_RESPONSAVEL') {
-            return res.status(403).json({ error: 'Compras bloqueadas pelo responsável.' });
+        if (e.message === 'SALDO_INSUFICIENTE') {
+            return res.status(400).json({
+                error: `Saldo insuficiente para finalizar o pedido. Faltam 🪙 ${e.falta ?? 'alguns'} PoloCoins.`,
+                falta: e.falta,
+                saldoAtual: e.saldoAtual,
+                totalPontos: e.totalPontos
+            });
         }
         if (e.message === 'OCORRENCIAS_PENDENTES') {
-            return res.status(403).json({ error: 'Você tem ocorrências pendentes de consentimento.' });
+            return res.status(403).json({ error: 'Você tem ocorrências pendentes de consentimento do seu responsável. Resolva primeiro antes de finalizar pedidos.' });
         }
-        return res.status(500).json({ error: 'Erro ao processar carrinho.' });
+        return res.status(500).json({ error: e.message || 'Erro ao processar carrinho.' });
     }
 });
 
@@ -908,6 +888,27 @@ app.get('/admin/entregas-pendentes/turmas', async (req, res) => {
     }
 });
 
+// --- Rotas de Retenção e Limpeza de Dados ---
+app.get('/admin/retencao-dados/status', (req, res) => {
+    try {
+        const status = obterStatusRetencao();
+        return res.status(200).json(status);
+    } catch (error) {
+        console.error('ERRO AO BUSCAR STATUS DE RETENÇÃO:', error);
+        return res.status(500).json({ error: 'Erro ao obter status de retenção de dados.' });
+    }
+});
+
+app.post('/admin/retencao-dados/executar', async (req, res) => {
+    try {
+        const resultado = await executarLimpezaGeral();
+        return res.status(200).json(resultado);
+    } catch (error) {
+        console.error('ERRO AO EXECUTAR LIMPEZA DE DADOS:', error);
+        return res.status(500).json({ error: 'Erro ao executar limpeza de dados.' });
+    }
+});
+
 // Inicialização segura do servidor
 const PORT = 3000;
 garantirCategoriasBasicas()
@@ -917,5 +918,6 @@ garantirCategoriasBasicas()
     .finally(() => {
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`Servidor ativo na porta ${PORT}`);
+            iniciarAgendadorRetencao();
         });
     });

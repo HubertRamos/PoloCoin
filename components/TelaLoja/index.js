@@ -48,12 +48,6 @@ export default async function TelaLoja(root, alunoId) {
                 </div>
             </div>
 
-            <!-- Status de liberação -->
-            <div id="loja-status-liberacao" class="alert alert-warning" style="display: none; margin-bottom: 16px;">
-                <div class="alert__icon">🔒</div>
-                <span>Compras <strong>bloqueadas</strong> pelo seu responsável. Produtos vão direto para os desejos.</span>
-            </div>
-
             <!-- Filtros -->
             <div id="loja-filtros" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
                 <input id="loja-busca" type="text" placeholder="Buscar produto..."
@@ -122,20 +116,6 @@ export default async function TelaLoja(root, alunoId) {
         document.getElementById('loja-saldo-valor').textContent = '?';
     }
 
-    // Permissão
-    let podeComprar = false;
-    try {
-        const resp = await fetch(`/aluno/pode-comprar?id=${alunoIdNum}`);
-        if (resp.ok) {
-            const d = await resp.json();
-            podeComprar = d.pode_comprar === true || d.pode_comprar === 1;
-        }
-    } catch { /* rota pode não existir */ }
-
-    if (!podeComprar) {
-        document.getElementById('loja-status-liberacao').style.display = 'block';
-    }
-
     // Categorias para filtro
     let categorias = [];
     try {
@@ -174,14 +154,14 @@ export default async function TelaLoja(root, alunoId) {
         const carrinho = lerCarrinho();
         const existing = carrinho.find(i => i.id === p.id);
         if (existing) {
-            existing.quantidade += 1;
+            existing.quantidade = (Number(existing.quantidade) || 1) + 1;
         } else {
             const custo = Number(p.custo || 0);
             carrinho.push({ id: p.id, nome: p.nome || 'Produto', custo, quantidade: 1 });
         }
         salvarCarrinho(carrinho);
         atualizarBadgeCarrinho();
-        exibirFeedback('success', `✅ ${p.nome || 'Produto'} adicionado ao carrinho!`);
+        exibirFeedback('success', `✅ <strong>${p.nome || 'Produto'}</strong> adicionado ao carrinho!`);
     };
 
     window.removerDoCarrinho = (id) => {
@@ -245,14 +225,24 @@ export default async function TelaLoja(root, alunoId) {
             atualizarBadgeCarrinho();
 
             if (res.ok) {
-                let msg = `✅ <strong>Compra realizada!</strong><br>`;
-                data.comprados.forEach(c => {
-                    msg += `✅ ${c.nome} (🪙 ${c.custo})<br>`;
-                });
-                if (data.saldo_restante !== null) {
-                    msg += `<br>Saldo restante: <strong>🪙 ${data.saldo_restante}</strong>`;
+                if (data.status === 'desejos' || data.tipo === 'desejos') {
+                    let msg = `📋 <strong>Pedido enviado para a Lista de Desejos!</strong><br>`;
+                    msg += `Aguarde a aprovação do seu responsável.<br>`;
+                    (data.desejos || []).forEach(d => {
+                        msg += `• ${d.nome} (×${d.quantidade || 1}) — 🪙 ${d.custo_total || d.custo}<br>`;
+                    });
+                    msg += `<br>Nenhum PoloCoin foi debitado. Saldo: <strong>🪙 ${data.saldo_restante}</strong>`;
+                    exibirFeedback('warning', msg);
+                } else {
+                    let msg = `✅ <strong>Compra realizada com sucesso!</strong><br>`;
+                    (data.comprados || []).forEach(c => {
+                        msg += `✅ ${c.nome} (×${c.quantidade || 1}) — 🪙 ${c.custo_total || c.custo}<br>`;
+                    });
+                    if (data.saldo_restante !== null && data.saldo_restante !== undefined) {
+                        msg += `<br>Saldo restante: <strong>🪙 ${data.saldo_restante}</strong>`;
+                    }
+                    exibirFeedback('success', msg);
                 }
-                exibirFeedback('success', msg);
                 await carregarProdutos(document.getElementById('loja-filtro-categoria').value, document.getElementById('loja-busca').value);
             } else {
                 let msg = `❌ <strong>Erro na compra:</strong><br>`;
@@ -279,7 +269,6 @@ export default async function TelaLoja(root, alunoId) {
             document.getElementById('loja-produtos').style.display = 'block';
             document.getElementById('loja-contagem').textContent = `(${produtos.length} itens)`;
             document.getElementById('loja-grid').innerHTML = produtos.map(p => {
-                const btnText = podeComprar ? 'Adicionar ao Carrinho' : 'Adicionar aos Desejos';
                 const cor = getCorCategoria(p.categoria_nome) || '#64748B';
                 const custo = p.custo_pontos ?? 0;
                 const nome = p.nome || 'Produto sem nome';
@@ -298,13 +287,10 @@ export default async function TelaLoja(root, alunoId) {
                         </div>
                         <button
                             data-id="${p.id}"
-                            onclick="${podeComprar
-                                ? `window.adicionarAoCarrinho({id:${p.id}, nome:'${nome.replace(/'/g, "\\'")}', custo:${custo}})`
-                                : `window.adicionarDesejo(${p.id})`
-                            }"
+                            onclick="window.adicionarAoCarrinho({id:${p.id}, nome:'${nome.replace(/'/g, "\\'")}', custo:${custo}})"
                             class="btn btn-primary btn--sm produto-card__botao"
                         >
-                            ${btnText}
+                            Adicionar ao Carrinho
                         </button>
                     </div>
                 `;

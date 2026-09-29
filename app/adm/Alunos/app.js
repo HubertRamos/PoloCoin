@@ -2,6 +2,7 @@ import Form from '../../../components/Form/index.js'
 import DashBoard from '../../../components/DashBoard/index.js'
 import Header from '../../../components/Header/index.js'
 import { linksHeader } from '../constLinks.js'
+import UploadFile from '../../../components/UploadFile/index.js'
 
 const root = document.getElementById('root')
 
@@ -152,6 +153,7 @@ function Render() {
                             </button>
                         </div>
                         ${Form('Cadastrar Aluno', inputsAluno, [])}
+                        ${UploadFile()}
                     </div>
                 ` : ''}
             </div>
@@ -252,6 +254,76 @@ function Render() {
             }
         })
     }
+    const fileInput = document.getElementById('csv-file')
+
+if (fileInput) {
+    fileInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0]
+        if (!file) return
+
+        const reader = new FileReader()
+
+        reader.onload = async function (e) {
+            const conteudo = e.target.result
+            const linhas = conteudo.split('\n')
+
+            let cadastrados = 0
+            let ignorados = 0
+
+            for (const linha of linhas) {
+                if (!linha.trim()) continue
+
+                const colunas = linha.split(',')
+
+                if (colunas.length < 4) {
+                    ignorados++
+                    continue
+                }
+
+                const nomeAluno = colunas[0].trim()
+                const senhaAluno = colunas[1].trim()
+                const nomeResponsavel = colunas[2].trim()
+                const senhaResponsavel = colunas[3].trim()
+
+                try {
+                    const resposta = await fetch(`/turmas/${turmaId}/alunos`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            nomeAluno,
+                            nomeResponsavel,
+                            senhaAluno,
+                            senhaResponsavel
+                        })
+                    })
+
+                    if (resposta.ok)
+                        cadastrados++
+                    else
+                        ignorados++
+
+                } catch (erro) {
+                    ignorados++
+                }
+            }
+
+            alert(
+                `Importação concluída!\n\n` +
+                `Cadastrados: ${cadastrados}\n` +
+                `Ignorados: ${ignorados}`
+            )
+
+            fileInput.value = ''
+            await carregarDadosDaTurmaEAlunos()
+        }
+
+        reader.readAsText(file)
+    })
 }
+}
+
+
 
 window.addEventListener('DOMContentLoaded', Render)

@@ -1,5 +1,6 @@
 import DashBoard from "../../../components/DashBoard/index.js"
 import Header from "../../../components/Header/index.js"
+import { abrirModalFiltroRelatorioAluno, abrirModalFiltroRelatorioTurma } from "./relatorios.js"
 
 const root = document.getElementById("root")
 const params = new URLSearchParams(window.location.search)
@@ -10,6 +11,34 @@ const professorId = sessionUser.id || null
 
 let categoriasAvaliacao = []
 let isModalOpen = false
+let currentModalRequestId = 0
+let lastActiveElementBeforeModal = null
+let activeModalKeydownHandler = null
+
+function fecharModal() {
+    currentModalRequestId++
+    isModalOpen = false
+
+    // Remove todos os overlays de modal da tela
+    const overlays = document.querySelectorAll(".modal-overlay, #modal-overlay")
+    overlays.forEach(overlay => overlay.remove())
+
+    // Remove listener de teclado para evitar vazamento
+    if (activeModalKeydownHandler) {
+        document.removeEventListener("keydown", activeModalKeydownHandler)
+        activeModalKeydownHandler = null
+    }
+
+    // Retorna o foco para o elemento ativo anterior à abertura do modal
+    if (lastActiveElementBeforeModal && typeof lastActiveElementBeforeModal.focus === "function") {
+        try {
+            lastActiveElementBeforeModal.focus()
+        } catch {
+            // Ignora se o elemento não for mais focalizável
+        }
+    }
+}
+window.fecharModal = fecharModal
 
 async function carregarCategoriasAvaliacao() {
     try {
@@ -34,16 +63,35 @@ async function carregarAlunos() {
     }
 
     try {
-        const resposta = await fetch(`/turmas/${turmaId}/alunos`)
-        const alunos = await resposta.json()
+      const resposta = await fetch(`/turmas/${turmaId}/alunos`)
+      const alunos = await resposta.json()
+
+      const alunosComSaldo = await Promise.all(
+          alunos.map(async (aluno) => {
+              try {
+                  const saldoRes = await fetch(`/aluno/saldo?id=${aluno.id}`)
+                  const saldo = await saldoRes.json()
+
+                  return {
+                      ...aluno,
+                      pontos: saldo.pontos || 0
+                  }
+              } catch {
+                  return {
+                      ...aluno,
+                      pontos: 0
+                  }
+              }
+          })
+      )
 
         if (alunos.length === 0) {
             contentDiv.innerHTML = `<div class="alert alert-info">Nenhum aluno cadastrado nesta turma ainda.</div>`
             return
         }
 
-        contentDiv.innerHTML = alunos.map(aluno => `
-            <div class="card card--hover" data-id="${aluno.id}" style="cursor:pointer;">
+        contentDiv.innerHTML = alunosComSaldo.map(aluno => `
+            <div class="card card--hover" data-id="${aluno.id}" tabindex="0" role="button" aria-label="Ver ocorrências de ${aluno.aluno_nome}" style="cursor:pointer;">
                 <div class="card__header-row">
                     <div class="card__icon card__icon--green">
                         <i class="fas fa-user-graduate"></i>
@@ -51,6 +99,13 @@ async function carregarAlunos() {
                     <div class="card__body">
                         <strong class="card__title">${aluno.aluno_nome}</strong>
                         <small class="card__meta">Responsável: ${aluno.responsavel_nome}</small>
+                        <div style="
+                            margin-top:8px;
+                            font-weight:600;
+                            color:#f59e0b;
+                        ">
+                            🪙 ${aluno.pontos} PoloCoins
+                        </div>
                     </div>
                     <div class="card__arrow card__arrow--green">
                         <i class="fas fa-arrow-right"></i>
@@ -60,10 +115,17 @@ async function carregarAlunos() {
         `).join('')
 
         document.querySelectorAll(".card--hover[data-id]").forEach(card => {
-            card.addEventListener("click", () => {
+            const acionar = () => {
                 const alunoId = card.getAttribute("data-id")
                 console.log("[AVAL] Card clicado — alunoId:", alunoId)
                 abrirModalAluno(alunoId)
+            }
+            card.addEventListener("click", acionar)
+            card.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    acionar()
+                }
             })
         })
         console.log("[AVAL] Cards renderizados:", document.querySelectorAll(".card--hover").length)
@@ -74,19 +136,45 @@ async function carregarAlunos() {
 }
 
 async function abrirModalAluno(alunoId, estadoDesejado) {
-    console.log("[AVAL] abrirModalAluno chamado — alunoId:", alunoId, "estado:", estadoDesejado || 'none');
+    console.log("[AVAL] abrirModalAluno chamado — alunoId:", alunoId, "estado:", estadoDesejado || 'none')
+    
+    // Salva o elemento com foco atual para retornar após o fechamento
+    if (!isModalOpen) {
+        lastActiveElementBeforeModal = document.activeElement
+    }
+
+    // Sinaliza modal aberto e gera ID único para a requisição
+    isModalOpen = true
+    const thisRequestId = ++currentModalRequestId
+
+    // Limpa quaisquer overlays residuais no DOM
+    const staleOverlays = document.querySelectorAll(".modal-overlay, #modal-overlay")
+    staleOverlays.forEach(o => o.remove())
+
     try {
         const sessionUser = JSON.parse(sessionStorage.getItem("poloUser") || "{}")
         const pId = sessionUser.id || professorId
-        console.log("[AVAL] Fetch avaliacoes — alunoId:", alunoId, "professorId:", pId)
-        const alunos = await fetch(`/turmas/${turmaId}/alunos`).then(r => r.json())
+
+        console.log("[AVAL] Fetch dados do aluno e avaliações — alunoId:", alunoId)
+        const [alunosRes, avaliacoesRes] = await Promise.all([
+            fetch(`/turmas/${turmaId}/alunos`),
+            fetch(`/avaliacoes/${alunoId}`)
+        ])
+
+        // Se o modal foi fechado enquanto aguardava a requisição, cancela
+        if (thisRequestId !== currentModalRequestId) return
+
+        const alunos = await alunosRes.json()
         const aluno = alunos.find(a => a.id == alunoId)
-        if (!aluno) { isModalOpen = false; return }
+        if (!aluno) {
+            fecharModal()
+            return
+        }
 
-        const avaliacoes = await fetch(`/avaliacoes/${alunoId}?professorId=${pId}`).then(r => r.json())
-        console.log("[AVAL] Avaliacoes fetchadas:", avaliacoes.length, avaliacoes)
+        let avaliacoes = await avaliacoesRes.json()
+        if (thisRequestId !== currentModalRequestId) return
 
-        // Normaliza campo data para YYYY-MM-DD (a API pode retornar Date ou ISO string)
+        // Normaliza campo data para YYYY-MM-DD
         avaliacoes.forEach(av => {
             if (av.data instanceof Date) {
                 av.data = av.data.toISOString().split('T')[0]
@@ -95,254 +183,438 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
             }
         })
 
-        // Calcula "hoje" no fuso horário local do browser (não UTC)
-function getDataHojeLocal() {
-    const agora = new Date()
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).formatToParts(agora)
-    const y = parts.find(p => p.type === 'year').value
-    const m = parts.find(p => p.type === 'month').value
-    const d = parts.find(p => p.type === 'day').value
-    return `${y}-${m}-${d}`
-}
+        // Calcula "hoje" no fuso horário local do browser
+        function getDataHojeLocal() {
+            const agora = new Date()
+            const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).formatToParts(agora)
+            const y = parts.find(p => p.type === 'year').value
+            const m = parts.find(p => p.type === 'month').value
+            const d = parts.find(p => p.type === 'day').value
+            return `${y}-${m}-${d}`
+        }
 
-const hoje = getDataHojeLocal()
-        const hojeAvaliacoes = avaliacoes.filter(av => {
-            const avData = typeof av.data === 'string' ? av.data.split('T')[0] : av.data
-            return avData === hoje
-        })
-        const historicoAvaliacoes = avaliacoes.filter(av => {
-            const avData = typeof av.data === 'string' ? av.data.split('T')[0] : av.data
-            return avData !== hoje
-        })
+        function formatarDataBR(dataStr) {
+            if (!dataStr) return ''
+            if (typeof dataStr === 'string' && dataStr.includes('-')) {
+                const [y, m, d] = dataStr.split('T')[0].split('-')
+                if (y && m && d) return `${d}/${m}/${y}`
+            }
+            try {
+                return new Date(dataStr).toLocaleDateString('pt-BR')
+            } catch {
+                return dataStr
+            }
+        }
 
-        const gruposHistorico = {}
-        historicoAvaliacoes.forEach(av => {
-            if (!gruposHistorico[av.data]) gruposHistorico[av.data] = []
-            gruposHistorico[av.data].push(av)
-        })
-        const chavesHistorico = Object.keys(gruposHistorico).sort((a, b) => b > a ? 1 : -1)
+        function renderAvaliacaoItem(av) {
+            const tipoLimpo = (av.tipo || (Number(av.pontos) < 0 ? 'negativa' : 'positiva')).toLowerCase().trim()
+            const isNegativa = tipoLimpo === 'negativa'
+            const tipoBadge = isNegativa ? '🔴 Ocorrência Negativa' : '🟢 Ocorrência Positiva'
+            const pontos = Number(av.pontos) || 0
+            const pontosTexto = (pontos > 0 ? `+${pontos}` : `${pontos}`) + ' PoloCoins'
+            const corBorda = isNegativa ? '#ef4444' : '#10b981'
+            const professorNome = av.professor_nome ? capitalizar(av.professor_nome) : 'Não informado'
+            const dataFormatada = formatarDataBR(av.data)
 
-        let capsulaEstadoAtual = estadoDesejado || 'hoje'
-
-        function capsulaHTML(estado) {
-            const botoes = [
-                { key: 'hoje', label: '📋 Hoje', bg: estado === 'hoje' ? '#0f172a' : 'transparent', fg: estado === 'hoje' ? '#fff' : '#0f172a' },
-                { key: 'historico', label: '🕓 Histórico', bg: estado === 'historico' ? '#0f172a' : 'transparent', fg: estado === 'historico' ? '#fff' : '#0f172a' },
-                { key: 'novo', label: '✏️ Nova ocorrência', bg: estado === 'novo' ? '#0f172a' : 'transparent', fg: estado === 'novo' ? '#fff' : '#0f172a' },
-            ]
             return `
-                <div class="capsula-top" style="display:flex; gap:6px; margin-bottom:12px;">
-                    ${botoes.map(b => `
-                        <button data-capsula-estado="${b.key}"
-                            style="flex:1; padding:8px 12px; border:none; border-radius:8px; background:${b.bg}; color:${b.fg};
-                                   font-size:12px; font-weight:600; cursor:pointer; transition:opacity 0.15s; text-align:center;"
-                            onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
-                            ${b.label}
-                        </button>
-                    `).join('')}
+                <div class="av-list-item" style="border-left-color:${corBorda}; margin-bottom:10px; padding:10px 12px; background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-size:12px; font-weight:600; color:#475569;">
+                            📅 ${dataFormatada}${av.hora ? ` <span style="font-weight:400; color:#94a3b8;">${av.hora}</span>` : ''}
+                        </span>
+                        <span style="display:inline-block; padding:2px 8px; border-radius:9999px; font-size:11px; font-weight:700; background:${isNegativa ? '#FEE2E2' : '#DCFCE7'}; color:${isNegativa ? '#DC2626' : '#16A34A'};">
+                            ${tipoBadge}
+                        </span>
+                    </div>
+
+                    <div style="font-size:13px; color:#334155; margin-bottom:4px;">
+                        <strong>Professor:</strong> ${professorNome}
+                    </div>
+
+                    <div style="font-size:14px; font-weight:700; color:${isNegativa ? '#DC2626' : '#16A34A'}; margin-bottom:4px;">
+                        ${pontosTexto}
+                    </div>
+
+                    <div style="font-size:13px; color:#0f172a; font-weight:500;">
+                        ${av.categoria && av.categoria !== 'observacao' ? `<strong>${capitalizar(av.categoria)}:</strong> ` : ''}${av.valor || ''}
+                    </div>
+
+                    ${av.observacao && av.observacao !== av.valor ? `<div style="font-size:12px; color:#64748b; margin-top:4px;">📝 ${av.observacao}</div>` : ''}
                 </div>
             `
         }
 
-        function renderAvaliacaoItem(av) {
-            return `<div class="av-list-item" style="border-left-color:${getCorByValor(av.categoria, av.valor)};">
-                <strong>${capitalizar(av.categoria)}:</strong> ${av.valor}
-                ${av.pontos !== undefined ? ` <span class="pts-badge">${av.pontos}p</span>` : ""}
-                ${av.observacao ? `<br/><small class="text-muted">📝 ${av.observacao}</small>` : ""}
-                <small class="text-muted text-xs" style="display:block; margin-top:4px;">🕐 ${av.hora}</small>
-            </div>`
-        }
+        function renderHistoricoHTML(historicoAvaliacoes) {
+            const gruposHistorico = {}
+            historicoAvaliacoes.forEach(av => {
+                const dataKey = av.data || 'Sem data'
+                if (!gruposHistorico[dataKey]) gruposHistorico[dataKey] = []
+                gruposHistorico[dataKey].push(av)
+            })
+            const chavesHistorico = Object.keys(gruposHistorico).sort((a, b) => b > a ? 1 : -1)
 
-        function renderHistoricoHTML() {
             if (chavesHistorico.length === 0) return '<p class="text-muted">Nenhum registro no histórico.</p>'
             const totalAvaliacoes = historicoAvaliacoes.length
             const totalPontos = historicoAvaliacoes.reduce((s, av) => s + (av.pontos || 0), 0)
             return `<div class="modal-historico-resumo" style="margin-bottom:12px; padding:8px 12px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;">
-                <small class="text-muted">📊 Total: <strong>${totalAvaliacoes}</strong> avaliação(ões) &nbsp;|&nbsp; 📈 <strong>${totalPontos}</strong> pts</small>
+                <small class="text-muted">📊 Total: <strong>${totalAvaliacoes}</strong> ocorrência(s) &nbsp;|&nbsp; 📈 <strong>${totalPontos}</strong> PoloCoins</small>
             </div>` + chavesHistorico.map(data => {
                 const itens = gruposHistorico[data]
                 return `
-                    <details style="margin-bottom:8px; border-left:3px solid #64748B; padding-left:8px;">
+                    <details style="margin-bottom:8px; border-left:3px solid #64748B; padding-left:8px;" open>
                         <summary style="cursor:pointer; font-weight:600; color:#0f172a; font-size:12px; padding:4px 0;">
-                            📅 ${data} — ${itens.length} avaliação(ões)
+                            📅 ${formatarDataBR(data)} — ${itens.length} ocorrência(s)
                         </summary>
-                        ${itens.map(renderAvaliacaoItem).join('')}
+                        <div style="margin-top:6px;">
+                            ${itens.map(renderAvaliacaoItem).join('')}
+                        </div>
                     </details>
                 `
             }).join('')
         }
 
-        const modalHtml = `
-            <div id="modal-overlay" class="modal-overlay" onclick="if(event.target===this)fecharModal()">
-                <div id="modal-content" class="modal-content" style="max-width:520px;">
-                    <div class="modal-header">
-                        <div>
-                            <h2 class="modal-title">${aluno.aluno_nome}</h2>
-                            <small class="modal-subtitle">Responsável: ${aluno.responsavel_nome}</small>
-                        </div>
-                        <button id="modal-fechar" class="btn btn-secondary btn--sm">
-                            <i class="fas fa-times"></i>
-                        </button>
+        let capsulaEstadoAtual = estadoDesejado || 'hoje'
+
+        // Cria o elemento modal overlay diretamente
+        const overlay = document.createElement("div")
+        overlay.id = "modal-overlay"
+        overlay.className = "modal-overlay"
+
+        overlay.innerHTML = `
+            <div id="modal-content" class="modal-content" style="max-width:520px;" role="dialog" aria-modal="true" aria-labelledby="modal-aluno-titulo">
+                <div class="modal-header">
+                    <div>
+                        <h2 id="modal-aluno-titulo" class="modal-title">${aluno.aluno_nome}</h2>
+                        <small class="modal-subtitle">Responsável: ${aluno.responsavel_nome}</small>
                     </div>
+                    <button id="modal-fechar" type="button" class="btn btn-secondary btn--sm" aria-label="Fechar modal" title="Fechar modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
 
-                    <div class="modal-body">
-                        ${capsulaHTML(capsulaEstadoAtual)}
+                <div class="modal-body">
+                    <div id="modal-capsula-nav" class="capsula-top" style="display:flex; gap:6px; margin-bottom:12px;"></div>
+                    <div id="modal-tab-content"></div>
+                </div>
 
-                        ${capsulaEstadoAtual === 'historico' ? `
-                            <div class="modal-section">
-                                <h3 class="modal-section-title">🕓 Histórico do aluno</h3>
-                                ${renderHistoricoHTML()}
-                            </div>
-                        ` : ''}
-
-                        ${capsulaEstadoAtual === 'hoje' ? `
-                            <div class="modal-section">
-                                <h3 class="modal-section-title">📋 Avaliações de hoje (${hojeAvaliacoes.length})</h3>
-                                ${hojeAvaliacoes.length === 0
-                                    ? '<p class="text-muted">Nenhuma avaliação registrada hoje.</p>'
-                                    : hojeAvaliacoes.map(renderAvaliacaoItem).join('')}
-                            </div>
-                        ` : ''}
-
-                        ${capsulaEstadoAtual === 'novo' ? `
-                            <div class="modal-section">
-                                <h3 class="modal-section-title">✏️ Nova avaliação</h3>
-                                <div class="modal-categorias">
-                                    ${categoriasAvaliacao.map(cat => `
-                                        <div class="modal-cat-group">
-                                            <small class="modal-cat-label">${cat.nome}</small>
-                                            <div class="modal-cat-buttons">
-                                                ${cat.opcoes.map(op => `
-                                                    <button data-categoria="${cat.nome.toLowerCase()}" data-valor="${op.valor}" data-pontos="${op.pontos}"
-                                                        class="btn-avaliacao-modal" style="background-color:${op.cor};"
-                                                        data-professor-id="${professorId || ""}">
-                                                        ${op.label} (${op.pontos}p)
-                                                    </button>
-                                                `).join('')}
-                                            </div>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                                <div class="modal-obs-form">
-                                    <small class="modal-obs-label">Observação</small>
-                                    <div class="modal-obs-row">
-                                        <input id="obs-input" type="text" placeholder="ex: chegou atrasado..."
-                                            class="form-input" />
-                                        <input id="pts-input" type="number" min="0" max="50" placeholder="0-50"
-                                            class="form-input form-input--sm" />
-                                        <small class="text-muted text-xs">pts (max 50)</small>
-                                    </div>
-                                    <p id="obs-aviso" class="alert alert-danger alert--sm" style="display:none;">Preencha a observação.</p>
-                                    <p id="data-auto" class="text-muted text-xs"></p>
-                                    <button id="btn-registrar-obs" class="btn btn-primary btn--sm">
-                                        <i class="fas fa-save"></i>
-                                        Registrar
-                                    </button>
-                                </div>
-                            </div>
-                        ` : ''}
-                    </div>
+                <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end; gap: 10px; border-radius: 0 0 14px 14px;">
+                    <button id="btn-modal-cancelar" type="button" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-times"></i> Fechar
+                    </button>
                 </div>
             </div>
         `
 
-        root.insertAdjacentHTML("beforeend", modalHtml)
-        const dataAutoEl = document.getElementById("data-auto")
-        if (dataAutoEl) dataAutoEl.textContent = `Data/hora automática: ${new Date().toLocaleString("pt-BR")}`
+        root.appendChild(overlay)
 
-        window.fecharModal = function() {
-            const overlay = document.getElementById("modal-overlay")
-            if (overlay) overlay.remove()
-            isModalOpen = false
+        function atualizarCapsulaNav() {
+            const botoes = [
+                { key: 'hoje', label: '📋 Hoje' },
+                { key: 'historico', label: '🕓 Histórico' },
+                { key: 'novo', label: '✏️ Nova ocorrência' },
+            ]
+            const navEl = overlay.querySelector("#modal-capsula-nav")
+            if (!navEl) return
+            navEl.innerHTML = botoes.map(b => {
+                const isActive = capsulaEstadoAtual === b.key
+                return `
+                    <button type="button" data-capsula-estado="${b.key}"
+                        style="flex:1; padding:8px 12px; border:none; border-radius:8px;
+                               background:${isActive ? '#0f172a' : 'transparent'};
+                               color:${isActive ? '#fff' : '#0f172a'};
+                               font-size:12px; font-weight:600; cursor:pointer; transition:opacity 0.15s; text-align:center;">
+                        ${b.label}
+                    </button>
+                `
+            }).join('')
+
+            navEl.querySelectorAll("[data-capsula-estado]").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    capsulaEstadoAtual = btn.getAttribute("data-capsula-estado")
+                    atualizarCapsulaNav()
+                    renderizarAbaAtual()
+                })
+            })
         }
 
-        const btnFechar = document.getElementById("modal-fechar")
-        if (btnFechar) btnFechar.addEventListener("click", window.fecharModal)
+        function renderizarAbaAtual() {
+            const container = overlay.querySelector("#modal-tab-content")
+            if (!container) return
 
-        document.querySelectorAll("[data-capsula-estado]").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const estado = btn.getAttribute("data-capsula-estado")
-                window.fecharModal()
-                setTimeout(() => abrirModalAluno(alunoId, estado), 50)
+            const hoje = getDataHojeLocal()
+            const hojeAvaliacoes = avaliacoes.filter(av => {
+                const avData = typeof av.data === 'string' ? av.data.split('T')[0] : av.data
+                return avData === hoje
             })
-        })
 
-        document.querySelectorAll("#modal-content button[data-categoria]").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                console.log("[AVAL] Clique no botão de avaliação");
-                console.log("[AVAL] professorId (variável):", professorId);
-                console.log("[AVAL] professorId (btn attr):", btn.getAttribute("data-professor-id"));
-                if (!professorId) { console.log("[AVAL] professorId é null — abortando"); alert("Professor não logado."); return }
-                const categoria = btn.getAttribute("data-categoria");
-                const valor = btn.getAttribute("data-valor");
-                const pid = btn.getAttribute("data-professor-id") || professorId;
-                console.log("[AVAL] categoria:", categoria, "valor:", valor, "pid:", pid, "alunoId:", alunoId);
+            if (capsulaEstadoAtual === 'historico') {
+                container.innerHTML = `
+                    <div class="modal-section">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                            <h3 class="modal-section-title" style="margin:0;">🕓 Histórico do aluno</h3>
+                            <button id="btn-imprimir-historico-aluno" type="button" class="btn btn-secondary btn--sm" style="font-size:12px; display:inline-flex; align-items:center; gap:6px;">
+                                <i class="fas fa-print"></i> Imprimir Histórico
+                            </button>
+                        </div>
+                        ${renderHistoricoHTML(avaliacoes)}
+                    </div>
+                `
 
-                try {
-                    console.log("[AVAL] Enviando POST para /avaliacoes...");
-                    const res = await fetch("/avaliacoes", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ alunoId, professorId: pid, categoria, valor, pontos: parseInt(btn.getAttribute("data-pontos")), observacao: "" }),
-                    });
-                    const data = await res.json();
-                    console.log("[AVAL] Resposta:", res.status, data);
-                    if (res.ok) {
-                        console.log("[AVAL] OK — fechando modal e recarregando");
-                        alert(`Registrado: ${capitalizar(categoria)} → ${btn.textContent}`);
-                        window.fecharModal();
-                        abrirModalAluno(alunoId);
-                    } else {
-                        console.log("[AVAL] ERRO do servidor:", data.error);
-                        alert(data.error || "Erro ao registrar.");
-                    }
-                } catch (erro) {
-                    console.error("[AVAL] Exceção:", erro);
-                    alert("Erro de conexão.");
-                }
-            });
-        })
-
-        const btnObs = document.getElementById("btn-registrar-obs")
-        if (btnObs) {
-            btnObs.addEventListener("click", async () => {
-                const obs = document.getElementById("obs-input").value.trim()
-                const pts = parseInt(document.getElementById("pts-input").value) || 0
-                const aviso = document.getElementById("obs-aviso")
-                const agora = new Date()
-                const data = agora.toISOString().split("T")[0]
-                const hora = agora.toTimeString().slice(0, 5)
-
-                if (!obs) { aviso.style.display = "block"; return }
-                if (pts < 0 || pts > 50) { alert("Pontos devem ser entre 0 e 50."); return }
-                aviso.style.display = "none"
-
-                if (!professorId) { alert("Professor não logado."); return }
-
-                try {
-                    const res = await fetch("/avaliacoes", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ alunoId, professorId, categoria: "observacao", valor: obs, pontos: pts, observacao: `${obs} — ${data} ${hora}` }),
+                const btnImprimirHist = container.querySelector("#btn-imprimir-historico-aluno")
+                if (btnImprimirHist) {
+                    btnImprimirHist.addEventListener("click", () => {
+                        const sessUser = JSON.parse(sessionStorage.getItem("poloUser") || "{}")
+                        abrirModalFiltroRelatorioAluno({
+                            alunoId: aluno.id,
+                            alunoNome: aluno.aluno_nome,
+                            turmaNome: aluno.turma_nome || `Turma #${turmaId}`,
+                            professorNome: sessUser.name || 'Professor'
+                        })
                     })
-                    const dataRes = await res.json()
-                    if (res.ok) {
-                        alert(`Observação registrada! ${pts} pts`)
-                        document.getElementById("obs-input").value = ""
-                        document.getElementById("pts-input").value = ""
-                        window.fecharModal()
-                        abrirModalAluno(alunoId)
-                    } else {
-                        alert(dataRes.error || "Erro ao registrar.")
-                    }
-                } catch (erro) {
-                    alert("Erro de conexão.")
                 }
+            } else if (capsulaEstadoAtual === 'hoje') {
+                container.innerHTML = `
+                    <div class="modal-section">
+                        <h3 class="modal-section-title">📋 Avaliações de hoje (${hojeAvaliacoes.length})</h3>
+                        ${hojeAvaliacoes.length === 0
+                            ? '<p class="text-muted">Nenhuma avaliação registrada hoje.</p>'
+                            : hojeAvaliacoes.map(renderAvaliacaoItem).join('')}
+                    </div>
+                `
+            } else if (capsulaEstadoAtual === 'novo') {
+                container.innerHTML = `
+                    <div class="modal-section">
+                        <h3 class="modal-section-title">✏️ Nova Ocorrência</h3>
+
+                        <div style="background:#f8fafc; padding:12px 14px; border-radius:8px; border:1px solid #cbd5e1; margin-bottom:14px;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:#1e293b; margin-bottom:8px;">
+                                Tipo da ocorrência <span style="color:#ef4444;">*</span>
+                            </label>
+                            <div style="display:flex; gap:18px; align-items:center;">
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:700; color:#16a34a;">
+                                    <input type="radio" name="tipo-ocorrencia" value="positiva" checked />
+                                    🟢 Positiva
+                                </label>
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:700; color:#dc2626;">
+                                    <input type="radio" name="tipo-ocorrencia" value="negativa" />
+                                    🔴 Negativa
+                                </label>
+                            </div>
+                            <small class="text-muted" style="display:block; font-size:11px; margin-top:6px;">
+                                Digite sempre números positivos. O sistema somará (+) ou subtrairá (-) PoloCoins automaticamente com base no tipo.
+                            </small>
+                        </div>
+
+                        <div class="modal-obs-form" style="background:#ffffff; padding:14px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:14px;">
+                            <label class="modal-obs-label" style="font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">
+                                Descrição / Motivo <span style="color:#ef4444;">*</span>
+                            </label>
+                            <input id="obs-input" type="text" placeholder="Ex: Participação em aula, Atraso, Ajuda aos colegas..."
+                                class="form-input" style="margin-bottom:12px;" />
+
+                            <label class="modal-obs-label" style="font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">
+                                Quantidade de PoloCoins <span style="color:#ef4444;">*</span>
+                            </label>
+                            <div class="modal-obs-row" style="margin-bottom:10px;">
+                                <input id="pts-input" type="number" min="0" max="500" placeholder="Ex: 10"
+                                    class="form-input form-input--sm" />
+                                <small class="text-muted text-xs">PoloCoins</small>
+                            </div>
+
+                            <p id="obs-aviso" class="alert alert-danger alert--sm" style="display:none; margin-bottom:10px;">Preencha a descrição e quantidade de PoloCoins.</p>
+                            <p id="data-auto" class="text-muted text-xs" style="margin-bottom:10px;">Data/hora automática: ${new Date().toLocaleString("pt-BR")}</p>
+
+                            <button id="btn-registrar-obs" type="button" class="btn btn-primary" style="width:100%;">
+                                <i class="fas fa-save"></i>
+                                Registrar Ocorrência
+                            </button>
+                        </div>
+
+                        <details style="border-top:1px solid #e2e8f0; padding-top:10px;">
+                            <summary style="cursor:pointer; font-size:12px; font-weight:600; color:#64748b; margin-bottom:8px;">
+                                ⚡ Ou selecione uma opção pré-definida rápida
+                            </summary>
+                            <div class="modal-categorias">
+                                ${categoriasAvaliacao.map(cat => `
+                                    <div class="modal-cat-group">
+                                        <small class="modal-cat-label">${cat.nome}</small>
+                                        <div class="modal-cat-buttons">
+                                            ${cat.opcoes.map(op => `
+                                                <button type="button" data-categoria="${cat.nome.toLowerCase()}" data-valor="${op.valor}" data-pontos="${op.pontos}"
+                                                    class="btn-avaliacao-modal" style="background-color:${op.cor};"
+                                                    data-professor-id="${professorId || ""}">
+                                                    ${op.label} (${op.pontos}p)
+                                                </button>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </details>
+                    </div>
+                `
+
+                // Botões de opções pré-definidas
+                container.querySelectorAll("button[data-categoria]").forEach(btn => {
+                    btn.addEventListener("click", async () => {
+                        if (!professorId) { alert("Professor não logado."); return }
+                        const categoria = btn.getAttribute("data-categoria")
+                        const valor = btn.getAttribute("data-valor")
+                        const pid = btn.getAttribute("data-professor-id") || professorId
+                        const tipoRadio = container.querySelector('input[name="tipo-ocorrencia"]:checked')?.value || 'positiva'
+                        const pontosBase = Math.abs(parseInt(btn.getAttribute("data-pontos")) || 0)
+
+                        try {
+                            const res = await fetch("/avaliacoes", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    alunoId,
+                                    professorId: pid,
+                                    categoria,
+                                    valor,
+                                    pontos: pontosBase,
+                                    tipo: tipoRadio,
+                                    observacao: ""
+                                }),
+                            })
+                            const data = await res.json()
+                            if (res.ok) {
+                                const sinal = tipoRadio === 'negativa' ? '-' : '+'
+                                alert(`Registrado como ${tipoRadio.toUpperCase()} (${sinal}${pontosBase} PoloCoins)!`)
+                                // Atualiza os dados locais de ocorrências sem destruir o modal
+                                const novaLista = await fetch(`/avaliacoes/${alunoId}`).then(r => r.json())
+                                novaLista.forEach(av => {
+                                    if (av.data instanceof Date) av.data = av.data.toISOString().split('T')[0]
+                                    else if (typeof av.data === 'string' && av.data.includes('T')) av.data = av.data.split('T')[0]
+                                })
+                                avaliacoes = novaLista
+                                capsulaEstadoAtual = 'hoje'
+                                atualizarCapsulaNav()
+                                renderizarAbaAtual()
+                                carregarAlunos()
+                            } else {
+                                alert(data.error || "Erro ao registrar.")
+                            }
+                        } catch (erro) {
+                            console.error("[AVAL] Exceção:", erro)
+                            alert("Erro de conexão.")
+                        }
+                    })
+                })
+
+                // Formulário manual de registro
+                const btnObs = container.querySelector("#btn-registrar-obs")
+                if (btnObs) {
+                    btnObs.addEventListener("click", async () => {
+                        const obs = container.querySelector("#obs-input").value.trim()
+                        const rawPts = container.querySelector("#pts-input").value
+                        const pts = Math.abs(parseInt(rawPts) || 0)
+                        const tipo = container.querySelector('input[name="tipo-ocorrencia"]:checked')?.value || 'positiva'
+                        const aviso = container.querySelector("#obs-aviso")
+
+                        if (!obs) {
+                            aviso.textContent = "Preencha a descrição / motivo."
+                            aviso.style.display = "block"
+                            return
+                        }
+                        if (!rawPts || pts <= 0) {
+                            aviso.textContent = "Informe a quantidade de PoloCoins (maior que 0)."
+                            aviso.style.display = "block"
+                            return
+                        }
+                        aviso.style.display = "none"
+
+                        if (!professorId) { alert("Professor não logado."); return }
+
+                        try {
+                            const res = await fetch("/avaliacoes", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    alunoId,
+                                    professorId,
+                                    categoria: "observacao",
+                                    valor: obs,
+                                    pontos: pts,
+                                    tipo: tipo,
+                                    observacao: obs
+                                }),
+                            })
+                            const dataRes = await res.json()
+                            if (res.ok) {
+                                const sinal = tipo === 'negativa' ? '-' : '+'
+                                alert(`Ocorrência registrada com sucesso!\nTipo: ${tipo.toUpperCase()}\nValor: ${sinal}${pts} PoloCoins`)
+                                // Atualiza os dados locais de ocorrências sem destruir o modal
+                                const novaLista = await fetch(`/avaliacoes/${alunoId}`).then(r => r.json())
+                                novaLista.forEach(av => {
+                                    if (av.data instanceof Date) av.data = av.data.toISOString().split('T')[0]
+                                    else if (typeof av.data === 'string' && av.data.includes('T')) av.data = av.data.split('T')[0]
+                                })
+                                avaliacoes = novaLista
+                                capsulaEstadoAtual = 'hoje'
+                                atualizarCapsulaNav()
+                                renderizarAbaAtual()
+                                carregarAlunos()
+                            } else {
+                                alert(dataRes.error || "Erro ao registrar ocorrência.")
+                            }
+                        } catch (erro) {
+                            console.error("[AVAL] Exceção ao registrar:", erro)
+                            alert("Erro de conexão com o servidor.")
+                        }
+                    })
+                }
+            }
+        }
+
+        atualizarCapsulaNav()
+        renderizarAbaAtual()
+
+        // 1. Fechar pelo botão "X" do topo (cabeçalho)
+        const btnFecharTopo = overlay.querySelector("#modal-fechar")
+        if (btnFecharTopo) {
+            btnFecharTopo.addEventListener("click", (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                fecharModal()
             })
         }
+
+        // 2. Fechar pelo botão "Fechar" / "Cancelar" do rodapé
+        const btnFecharRodape = overlay.querySelector("#btn-modal-cancelar")
+        if (btnFecharRodape) {
+            btnFecharRodape.addEventListener("click", (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                fecharModal()
+            })
+        }
+
+        // 3. Fechar clicando fora do modal (backdrop/overlay)
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) {
+                fecharModal()
+            }
+        })
+
+        // 4. Fechar teclando Escape
+        if (activeModalKeydownHandler) {
+            document.removeEventListener("keydown", activeModalKeydownHandler)
+        }
+        activeModalKeydownHandler = (e) => {
+            if (e.key === "Escape" || e.keyCode === 27) {
+                fecharModal()
+            }
+        }
+        document.addEventListener("keydown", activeModalKeydownHandler)
+
+        // Coloca o foco no botão de fechar para garantir navegação por teclado acessível
+        btnFecharTopo?.focus()
+
     } catch (erro) {
-        console.error("Erro:", erro)
-        isModalOpen = false
+        console.error("[AVAL] Erro ao abrir modal do aluno:", erro)
+        fecharModal()
     }
 }
 
@@ -395,19 +667,28 @@ async function mostrarTodasOcorrencias() {
                                     <i class="fas fa-user-graduate" style="color:#3B82F6; margin-right:6px;"></i>${nome}
                                     <span class="text-muted" style="font-weight:400; font-size:12px; margin-left:8px;">${avs.length} av &middot; ${totalPts} pts</span>
                                 </div>
-                                ${avs.map(av => `
-                                    <div class="av-list-item" style="border-left-color:${getCorByValor(av.categoria, av.valor)}; margin-bottom:4px;">
-                                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
-                                            <strong>${capitalizar(av.categoria)}:</strong> ${av.valor}
-                                            ${av.pontos !== undefined ? `<span class="pts-badge">${av.pontos}p</span>` : ""}
+                                ${avs.map(av => {
+                                    const isNeg = (av.tipo === 'negativa') || (Number(av.pontos) < 0);
+                                    const pontosFormatados = (Number(av.pontos) > 0 ? `+${av.pontos}` : `${av.pontos || 0}`) + ' PoloCoins';
+                                    return `
+                                    <div class="av-list-item" style="border-left-color:${isNeg ? '#ef4444' : '#10b981'}; margin-bottom:8px; padding:10px 12px; background:#fff; border:1px solid #e2e8f0; border-radius:6px;">
+                                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px; margin-bottom:4px;">
+                                            <span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:9999px; background:${isNeg ? '#fee2e2' : '#dcfce7'}; color:${isNeg ? '#dc2626' : '#16a34a'};">
+                                                ${isNeg ? '🔴 Ocorrência Negativa' : '🟢 Ocorrência Positiva'}
+                                            </span>
+                                            <span style="font-weight:700; font-size:13px; color:${isNeg ? '#dc2626' : '#16a34a'};">${pontosFormatados}</span>
+                                        </div>
+                                        <div style="font-size:13px; font-weight:600; color:#0f172a;">
+                                            ${capitalizar(av.categoria)}: ${av.valor}
                                         </div>
                                         ${av.observacao ? `<small class="text-muted" style="display:block; margin-top:2px;">📝 ${av.observacao}</small>` : ""}
-                                        <small class="text-muted text-xs" style="display:block; margin-top:2px;">
-                                            <i class="fas fa-chalkboard-teacher" style="margin-right:4px;"></i>${capitalizar(av.professor_nome)} &middot; 
-                                            <i class="far fa-calendar-alt" style="margin-right:4px;"></i>${av.data} ${av.hora}
+                                        <small class="text-muted text-xs" style="display:block; margin-top:4px;">
+                                            <i class="fas fa-chalkboard-teacher" style="margin-right:4px;"></i>${capitalizar(av.professor_nome)} &middot;
+                                            <i class="far fa-calendar-alt" style="margin-right:4px;"></i>${formatarDataBR(av.data)} ${av.hora || ''}
                                         </small>
                                     </div>
-                                `).join('')}
+                                    `;
+                                }).join('')}
                             </div>
                         `
                     }).join('')}
@@ -451,9 +732,14 @@ function Render() {
                     <h1 class="polocoin-main__title">Alunos da Turma</h1>
                     <p class="polocoin-main__subtitle">Clique no aluno para ver ou registrar ocorrências</p>
                 </div>
-                <button id="btn-ver-todas-ocorrencias" class="btn btn-secondary">
-                    <i class="fas fa-list"></i> Ver todas as ocorrências da turma
-                </button>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button id="btn-relatorio-turma" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px;">
+                        <i class="fas fa-print"></i> Relatório da Turma
+                    </button>
+                    <button id="btn-ver-todas-ocorrencias" class="btn btn-secondary">
+                        <i class="fas fa-list"></i> Ver todas as ocorrências da turma
+                    </button>
+                </div>
             </div>
 
             <div class="polocoin-main__layout">
@@ -463,11 +749,39 @@ function Render() {
             </div>
 
             <div id="dashboard-content" class="card-grid stagger-children"></div>
+            <div id="print-area" style="display:none;"></div>
         </main>
     `
 
     carregarAlunos()
     document.getElementById("btn-ver-todas-ocorrencias").addEventListener("click", mostrarTodasOcorrencias)
+
+    document.getElementById("btn-relatorio-turma")?.addEventListener("click", async () => {
+        let listaAlunos = []
+        let turmaNome = `Turma #${turmaId}`
+        try {
+            const [respAlunos, respTurmas] = await Promise.all([
+                fetch(`/turmas/${turmaId}/alunos`),
+                fetch('/turmas')
+            ])
+            listaAlunos = await respAlunos.json()
+            const turmas = await respTurmas.json()
+            const tEncontrada = turmas.find(t => t.id == turmaId)
+            if (tEncontrada) {
+                turmaNome = `${tEncontrada.serie}º ${tEncontrada.turma}`
+            }
+        } catch (e) {
+            console.error('Erro ao buscar dados para relatório:', e)
+        }
+
+        const sessUser = JSON.parse(sessionStorage.getItem("poloUser") || "{}")
+        abrirModalFiltroRelatorioTurma({
+            turmaId,
+            turmaNome,
+            alunos: listaAlunos,
+            professorNome: sessUser.name || 'Professor'
+        })
+    })
 }
 
 window.addEventListener("DOMContentLoaded", Render)

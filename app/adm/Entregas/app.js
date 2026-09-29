@@ -162,6 +162,81 @@ async function confirmarEntrega(compraId) {
     }
 }
 
+
+function imprimirPendentes() {
+
+    if (compras.length === 0) {
+        alert('Não existem entregas pendentes para imprimir.')
+        return
+    }
+
+    const printArea = document.getElementById('print-area')
+
+    const filtros = []
+
+    if (filtroProduto)
+        filtros.push(`Produto: ${filtroProduto}`)
+
+    if (filtroCategoria)
+        filtros.push(`Categoria: ${filtroCategoria}`)
+
+    if (filtroTurmaNome)
+        filtros.push(`Turma: ${filtroTurmaNome}`)
+
+    printArea.innerHTML = `
+        <div class="print-wrapper">
+
+            <h1>PoloCoin - Entregas Pendentes</h1>
+
+            <p>
+                <strong>Data:</strong>
+                ${new Date().toLocaleString('pt-BR')}
+            </p>
+
+            <p>
+                <strong>Filtros:</strong>
+                ${filtros.length ? filtros.join(' | ') : 'Nenhum'}
+            </p>
+
+            <p>
+                <strong>Total:</strong>
+                ${compras.length} entrega(s)
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Aluno</th>
+                        <th>Produto</th>
+                        <th>Categoria</th>
+                        <th>Turma</th>
+                        <th>Pontos</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    ${compras.map(c => `
+                        <tr>
+                            <td>${c.aluno_nome || '-'}</td>
+                            <td>${c.produto_nome || '-'}</td>
+                            <td>${c.categoria_nome || '-'}</td>
+                            <td>${c.turma_nome || '-'}</td>
+                            <td>${c.custo_pontos || 0}</td>
+                            <td>${formatarData(c.criado_em)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `
+
+    setTimeout(() => {
+    window.print()
+}, 100)
+}
+
+
 async function Render() {
     await carregarCompras()
     await carregarFiltros()
@@ -190,6 +265,9 @@ async function Render() {
                 </div>
 
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button id="btn-imprimir" class="btn btn-primary" style="font-size:12px;">
+                        <i class="fa-solid fa-print"></i> Imprimir Pendentes
+                    </button>
                     <button id="btn-filtro-produto" class="btn btn-secondary" style="font-size:12px;">
                         <i class="fa-solid fa-filter"></i> Filtrar por Produto
                     </button>
@@ -203,6 +281,7 @@ async function Render() {
             </div>
 
             <div id="dashboard-content"></div>
+            <div id="print-area" style="display:none;"></div>
         </main>
 
         <style>
@@ -211,6 +290,61 @@ async function Render() {
             #btn-filtro-turma:hover {
                 background: #f1f5f9;
             }
+
+@media print {
+
+    body * {
+        visibility: hidden;
+    }
+
+    #print-area,
+    #print-area * {
+        visibility: visible;
+    }
+
+    #print-area {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white;
+        padding: 20px;
+    }
+
+    #print-area h1 {
+        margin-bottom: 16px;
+    }
+
+    #print-area table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+    }
+
+    #print-area th,
+    #print-area td {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: left;
+    }
+
+    #print-area tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .btn,
+    header,
+    nav {
+        display: none !important;
+    }
+}
+
+@page {
+    margin: 15mm;
+}
+
         </style>
     `
 
@@ -219,6 +353,7 @@ async function Render() {
     document.getElementById('btn-filtro-produto')?.addEventListener('click', () => abrirModalFiltro('produto'))
     document.getElementById('btn-filtro-categoria')?.addEventListener('click', () => abrirModalFiltro('categoria'))
     document.getElementById('btn-filtro-turma')?.addEventListener('click', () => abrirModalFiltro('turma'))
+    document.getElementById('btn-imprimir')?.addEventListener('click', imprimirPendentes)
 }
 
 function renderizarCompras() {

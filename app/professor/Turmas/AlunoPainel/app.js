@@ -123,6 +123,13 @@ async function carregarDadosDoAluno() {
                                     <span class="avaliacao-item__categoria">${capitalizar(av.categoria)}</span>
                                     <span class="avaliacao-item__valor">${av.valor}</span>
                                 </div>
+                                <div style="margin-top:2px;">
+                                    <span style="font-size:11px; font-weight:700; color:${(av.tipo === 'negativa' || Number(av.pontos) < 0) ? '#dc2626' : '#16a34a'};">
+                                        ${(av.tipo === 'negativa' || Number(av.pontos) < 0) ? '🔴 Ocorrência Negativa' : '🟢 Ocorrência Positiva'}
+                                    </span>
+                                </div>
+                                ${av.professor_nome ? `<div style="font-size:12px; color:#475569; margin-top:2px;"><strong>Professor:</strong> ${capitalizar(av.professor_nome)}</div>` : ''}
+                                ${av.pontos !== undefined ? `<div style="font-size:12px; font-weight:600; color:${(Number(av.pontos) < 0) ? '#dc2626' : '#16a34a'}; margin-top:2px;">${(Number(av.pontos) > 0 ? '+' : '') + av.pontos} PoloCoins</div>` : ''}
                                 ${av.observacao ? `<p class="avaliacao-item__obs">📝 ${av.observacao}</p>` : ""}
                                 <small class="avaliacao-item__data">${av.data} ${av.hora}</small>
                             </div>
@@ -156,12 +163,28 @@ async function carregarDadosDoAluno() {
                 <div class="card__section card__section--obs">
                     <h3 class="card__section-title">
                         <i class="fas fa-pen"></i>
-                        Observação
+                        Nova Ocorrência / Observação
                     </h3>
+                    <div style="background:#f8fafc; padding:10px 12px; border-radius:6px; border:1px solid #e2e8f0; margin-bottom:12px;">
+                        <label style="display:block; font-size:12px; font-weight:700; color:#1e293b; margin-bottom:6px;">
+                            Tipo da ocorrência <span style="color:#ef4444;">*</span>
+                        </label>
+                        <div style="display:flex; gap:16px; align-items:center;">
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:600; color:#16a34a;">
+                                <input type="radio" name="painel-tipo-ocorrencia" value="positiva" checked />
+                                🟢 Positiva
+                            </label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:600; color:#dc2626;">
+                                <input type="radio" name="painel-tipo-ocorrencia" value="negativa" />
+                                🔴 Negativa
+                            </label>
+                        </div>
+                    </div>
                     <div class="obs-form">
-                        <input id="obs-input" type="text" placeholder="ex: chegou atrasado, não trouxe material..."
+                        <input id="obs-input" type="text" placeholder="ex: Participação em aula, Atraso, etc."
                             class="form-input" />
                         <div class="obs-form__date-time">
+                            <input id="pts-input" type="number" min="0" placeholder="PoloCoins (ex: 10)" class="form-input form-input--sm" />
                             <input id="data-input" type="date" class="form-input form-input--sm" />
                             <input id="hora-input" type="time" class="form-input form-input--sm" />
                         </div>
@@ -170,7 +193,7 @@ async function carregarDadosDoAluno() {
                         </p>
                         <button id="btn-registrar-obs" class="btn btn-primary">
                             <i class="fas fa-save"></i>
-                            Registrar observação
+                            Registrar ocorrência
                         </button>
                     </div>
                 </div>
@@ -186,6 +209,7 @@ async function carregarDadosDoAluno() {
                 const categoria = btn.getAttribute("data-categoria")
                 const valor = btn.getAttribute("data-valor")
                 const pid = btn.getAttribute("data-professor-id") || professorId
+                const tipo = document.querySelector('input[name="painel-tipo-ocorrencia"]:checked')?.value || 'positiva'
 
                 if (!pid) { alert("Professor não logado."); return }
 
@@ -193,11 +217,11 @@ async function carregarDadosDoAluno() {
                     const res = await fetch("/avaliacoes", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ alunoId, professorId: pid, categoria, valor, observacao: "" }),
+                        body: JSON.stringify({ alunoId, professorId: pid, categoria, valor, pontos: 10, tipo, observacao: "" }),
                     })
                     const data = await res.json()
                     if (res.ok) {
-                        alert(`Registrado: ${capitalizar(categoria)} → ${btn.textContent}`)
+                        alert(`Registrado como ${tipo.toUpperCase()}: ${capitalizar(categoria)} → ${btn.textContent}`)
                         carregarDadosDoAluno()
                     } else {
                         alert(data.error || "Erro ao registrar.")
@@ -210,6 +234,8 @@ async function carregarDadosDoAluno() {
 
         document.getElementById("btn-registrar-obs").addEventListener("click", async () => {
             const obs = document.getElementById("obs-input").value.trim()
+            const pts = Math.abs(parseInt(document.getElementById("pts-input").value) || 0)
+            const tipo = document.querySelector('input[name="painel-tipo-ocorrencia"]:checked')?.value || 'positiva'
             const data = document.getElementById("data-input").value
             const hora = document.getElementById("hora-input").value
             const aviso = document.getElementById("obs-aviso")
@@ -223,12 +249,13 @@ async function carregarDadosDoAluno() {
                 const res = await fetch("/avaliacoes", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ alunoId, professorId, categoria: "observacao", valor: obs, observacao: `${obs} — ${data} ${hora}` }),
+                    body: JSON.stringify({ alunoId, professorId, categoria: "observacao", valor: obs, pontos: pts, tipo, observacao: `${obs} — ${data} ${hora}` }),
                 })
                 const dataRes = await res.json()
                 if (res.ok) {
-                    alert("Observação registrada!")
+                    alert(`Ocorrência registrada como ${tipo.toUpperCase()}!`)
                     document.getElementById("obs-input").value = ""
+                    document.getElementById("pts-input").value = ""
                     carregarDadosDoAluno()
                 } else {
                     alert(dataRes.error || "Erro ao registrar.")

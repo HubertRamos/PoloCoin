@@ -129,70 +129,99 @@ window.closeMobileSidebar = function() {
 }
 
 // Funções globais para os cards de filho/desejo
-window.liberarCompra = async function(alunoId) {
+window.liberarCompra = async function(alunoId, btnElement) {
+    if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.innerHTML = '⏳ Atualizando...';
+    }
     try {
         const resposta = await fetch('/aluno/pode-comprar', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aluno_id: alunoId, pode_comprar: true }),
-        })
+            body: JSON.stringify({ aluno_id: Number(alunoId), pode_comprar: true }),
+        });
         if (resposta.ok) {
-            alert('✅ Compra liberada para este aluno!')
-            window.location.reload()
+            const conteudo = document.getElementById('conteudo-principal');
+            if (conteudo) await renderDashboard(conteudo);
         } else {
-            alert('Erro ao liberar compra.')
+            if (btnElement) {
+                btnElement.disabled = false;
+                btnElement.innerHTML = '🔓 Liberar';
+            }
         }
     } catch (erro) {
-        console.error('Erro ao liberar compra:', erro)
-        alert('Erro de conexão.')
+        console.error('Erro ao liberar compra:', erro);
+        if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.innerHTML = '🔓 Liberar';
+        }
     }
-}
+};
 
-window.bloquearCompra = async function(alunoId) {
+window.bloquearCompra = async function(alunoId, btnElement) {
+    if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.innerHTML = '⏳ Atualizando...';
+    }
     try {
         const resposta = await fetch('/aluno/pode-comprar', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aluno_id: alunoId, pode_comprar: false }),
-        })
+            body: JSON.stringify({ aluno_id: Number(alunoId), pode_comprar: false }),
+        });
         if (resposta.ok) {
-            alert('🔒 Compra bloqueada para este aluno!')
-            window.location.reload()
+            const conteudo = document.getElementById('conteudo-principal');
+            if (conteudo) await renderDashboard(conteudo);
         } else {
-            alert('Erro ao bloquear compra.')
+            if (btnElement) {
+                btnElement.disabled = false;
+                btnElement.innerHTML = '🔒 Bloquear';
+            }
         }
     } catch (erro) {
-        console.error('Erro ao bloquear compra:', erro)
-        alert('Erro de conexão.')
+        console.error('Erro ao bloquear compra:', erro);
+        if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.innerHTML = '🔒 Bloquear';
+        }
     }
-}
+};
 
-window.autorizarCompra = async function(alunoId, produtoId, nomeProduto, custoPontos) {
-    if (!confirm(`Autorizar a compra de "${nomeProduto}" (🪙 ${custoPontos} pontos) para o aluno?`)) {
-        return
+window.autorizarCompra = async function(alunoId, produtoId, btnElement) {
+    if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.innerHTML = '⏳ Processando...';
     }
     try {
         const resposta = await fetch('/responsavel/comprar-desejo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aluno_id: alunoId, produto_id: produtoId }),
-        })
-        const resultado = await resposta.json()
+            body: JSON.stringify({
+                aluno_id: Number(alunoId),
+                produto_id: Number(produtoId),
+                responsavel_id: user?.id || null
+            }),
+        });
+        const resultado = await resposta.json();
         if (resposta.ok) {
-            alert(`✅ Compra autorizada!\n\n"${resultado.produto?.nome}" por 🪙 ${resultado.produto?.custo_pontos} pontos.\nSaldo restante do aluno: 🪙 ${resultado.saldo_restante}`)
-            window.location.reload()
+            const conteudo = document.getElementById('conteudo-principal');
+            if (conteudo) {
+                await renderDashboard(conteudo);
+            }
         } else {
-            if (resultado.error && resultado.error.includes('Saldo insuficiente')) {
-                alert('❌ O aluno não tem pontos suficientes para esta compra.')
-            } else {
-                alert('❌ Erro ao autorizar compra: ' + (resultado.error || 'Desconhecido'))
+            if (btnElement) {
+                btnElement.disabled = false;
+                btnElement.innerHTML = '✅ Autorizar';
             }
         }
     } catch (erro) {
-        console.error('Erro ao autorizar compra:', erro)
-        alert('Erro de conexão.')
+        console.error('Erro ao autorizar compra:', erro);
+        if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.innerHTML = '✅ Autorizar';
+        }
     }
-}
+};
 
 /** Verifica ocorrências negativas pendentes */
 async function verificarOcorrenciasNegativas() {

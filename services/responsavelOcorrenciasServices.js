@@ -39,7 +39,12 @@ export async function puxarOcorrenciasNegativasDoResponsavel(responsavelId) {
     // 2. Busca avaliações não consentidas desses alunos
     const { data: avaliacoes, error: errAv } = await supabase
         .from('avaliacoes')
-        .select('id, aluno_id, categoria, valor, pontos, observacao, criado_em, consentido')
+        .select(`
+            id, aluno_id, professor_id, categoria, valor, pontos, observacao, criado_em, consentido,
+            professores (
+                name
+            )
+        `)
         .in('aluno_id', alunoIds)
         .eq('consentido', false)
         .order('criado_em', { ascending: false });
@@ -50,11 +55,14 @@ export async function puxarOcorrenciasNegativasDoResponsavel(responsavelId) {
 
     const rows = [];
     for (const av of (avaliacoes || [])) {
-        const isNegativo = (av.pontos !== null && av.pontos <= 10) || valoresNegativos.includes(av.valor);
+        const isNegativo = av.tipo
+            ? (String(av.tipo).toLowerCase().trim() === 'negativa')
+            : (Number(av.pontos) < 0 || valoresNegativos.includes(av.valor));
         if (!isNegativo) continue;
 
         const aluno = alunoMap.get(av.aluno_id);
         const turma = aluno?.turmas ? (Array.isArray(aluno.turmas) ? aluno.turmas[0] : aluno.turmas) : null;
+        const prof = Array.isArray(av.professores) ? av.professores[0] : av.professores;
         const ts = av.criado_em ? new Date(av.criado_em) : null;
 
         rows.push({
@@ -63,12 +71,15 @@ export async function puxarOcorrenciasNegativasDoResponsavel(responsavelId) {
             avaliacao_id: av.id,
             categoria: av.categoria,
             valor: av.valor,
+            tipo: 'negativa',
             pontos: av.pontos,
             observacao: av.observacao,
             data: ts ? ts.toISOString().slice(0, 10) : null,
             hora: ts ? ts.toISOString().slice(11, 19) : null,
             serie: turma?.serie ?? null,
-            turma: turma?.turma ?? null
+            turma: turma?.turma ?? null,
+            professor_id: av.professor_id ?? null,
+            professor_nome: prof?.name ?? null
         });
     }
 
