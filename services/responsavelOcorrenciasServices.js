@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import { resolverAvatarAluno } from './avatarService.js';
 
 /**
  * Busca ocorrências negativas de todos os alunos de um responsável.
@@ -68,6 +69,7 @@ export async function puxarOcorrenciasNegativasDoResponsavel(responsavelId) {
         rows.push({
             aluno_id: av.aluno_id,
             aluno_nome: aluno?.nome ?? null,
+            aluno_avatar: resolverAvatarAluno(av.aluno_id, aluno?.avatar),
             avaliacao_id: av.id,
             categoria: av.categoria,
             valor: av.valor,

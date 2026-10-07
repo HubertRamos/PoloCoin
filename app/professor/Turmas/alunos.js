@@ -1,6 +1,8 @@
 import DashBoard from "../../../components/DashBoard/index.js"
 import Header from "../../../components/Header/index.js"
+import AlunoAvatar from "../../../components/AlunoAvatar/index.js"
 import { abrirModalFiltroRelatorioAluno, abrirModalFiltroRelatorioTurma } from "./relatorios.js"
+import { renderSeletorOcorrencias } from "../../../components/OcorrenciasPersonalizadas/index.js"
 
 const root = document.getElementById("root")
 const params = new URLSearchParams(window.location.search)
@@ -93,11 +95,9 @@ async function carregarAlunos() {
         contentDiv.innerHTML = alunosComSaldo.map(aluno => `
             <div class="card card--hover" data-id="${aluno.id}" tabindex="0" role="button" aria-label="Ver ocorrências de ${aluno.aluno_nome}" style="cursor:pointer;">
                 <div class="card__header-row">
-                    <div class="card__icon card__icon--green">
-                        <i class="fas fa-user-graduate"></i>
-                    </div>
+                    ${AlunoAvatar({ aluno, tamanho: 'medio', formato: 'avatar-only' })}
                     <div class="card__body">
-                        <strong class="card__title">${aluno.aluno_nome}</strong>
+                        <strong class="card__title">${AlunoAvatar({ aluno, tamanho: 'pequeno', formato: 'inline' })}</strong>
                         <small class="card__meta">Responsável: ${aluno.responsavel_nome}</small>
                         <div style="
                             margin-top:8px;
@@ -284,7 +284,7 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
             <div id="modal-content" class="modal-content" style="max-width:520px;" role="dialog" aria-modal="true" aria-labelledby="modal-aluno-titulo">
                 <div class="modal-header">
                     <div>
-                        <h2 id="modal-aluno-titulo" class="modal-title">${aluno.aluno_nome}</h2>
+                        <h2 id="modal-aluno-titulo" class="modal-title">${AlunoAvatar({ aluno, tamanho: 'medio', formato: 'inline' })}</h2>
                         <small class="modal-subtitle">Responsável: ${aluno.responsavel_nome}</small>
                     </div>
                     <button id="modal-fechar" type="button" class="btn btn-secondary btn--sm" aria-label="Fechar modal" title="Fechar modal">
@@ -367,6 +367,7 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
                         abrirModalFiltroRelatorioAluno({
                             alunoId: aluno.id,
                             alunoNome: aluno.aluno_nome,
+                            alunoAvatar: aluno.avatar,
                             turmaNome: aluno.turma_nome || `Turma #${turmaId}`,
                             professorNome: sessUser.name || 'Professor'
                         })
@@ -384,133 +385,123 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
             } else if (capsulaEstadoAtual === 'novo') {
                 container.innerHTML = `
                     <div class="modal-section">
-                        <h3 class="modal-section-title">✏️ Nova Ocorrência</h3>
+                        <h3 class="modal-section-title">✏️ Registrar Ocorrência</h3>
 
-                        <div style="background:#f8fafc; padding:12px 14px; border-radius:8px; border:1px solid #cbd5e1; margin-bottom:14px;">
-                            <label style="display:block; font-size:12px; font-weight:700; color:#1e293b; margin-bottom:8px;">
-                                Tipo da ocorrência <span style="color:#ef4444;">*</span>
-                            </label>
-                            <div style="display:flex; gap:18px; align-items:center;">
-                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:700; color:#16a34a;">
-                                    <input type="radio" name="tipo-ocorrencia" value="positiva" checked />
-                                    🟢 Positiva
-                                </label>
-                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:700; color:#dc2626;">
-                                    <input type="radio" name="tipo-ocorrencia" value="negativa" />
-                                    🔴 Negativa
-                                </label>
-                            </div>
-                            <small class="text-muted" style="display:block; font-size:11px; margin-top:6px;">
-                                Digite sempre números positivos. O sistema somará (+) ou subtrairá (-) PoloCoins automaticamente com base no tipo.
-                            </small>
-                        </div>
+                        <!-- Seletor com Ocorrências Padrão e Personalizadas (Tipo Automático e Inerente) -->
+                        <div id="container-seletor-ocorrencias"></div>
 
-                        <div class="modal-obs-form" style="background:#ffffff; padding:14px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:14px;">
-                            <label class="modal-obs-label" style="font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">
-                                Descrição / Motivo <span style="color:#ef4444;">*</span>
-                            </label>
-                            <input id="obs-input" type="text" placeholder="Ex: Participação em aula, Atraso, Ajuda aos colegas..."
-                                class="form-input" style="margin-bottom:12px;" />
-
-                            <label class="modal-obs-label" style="font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">
-                                Quantidade de PoloCoins <span style="color:#ef4444;">*</span>
-                            </label>
-                            <div class="modal-obs-row" style="margin-bottom:10px;">
-                                <input id="pts-input" type="number" min="0" max="500" placeholder="Ex: 10"
-                                    class="form-input form-input--sm" />
-                                <small class="text-muted text-xs">PoloCoins</small>
-                            </div>
-
-                            <p id="obs-aviso" class="alert alert-danger alert--sm" style="display:none; margin-bottom:10px;">Preencha a descrição e quantidade de PoloCoins.</p>
-                            <p id="data-auto" class="text-muted text-xs" style="margin-bottom:10px;">Data/hora automática: ${new Date().toLocaleString("pt-BR")}</p>
-
-                            <button id="btn-registrar-obs" type="button" class="btn btn-primary" style="width:100%;">
-                                <i class="fas fa-save"></i>
-                                Registrar Ocorrência
-                            </button>
-                        </div>
-
-                        <details style="border-top:1px solid #e2e8f0; padding-top:10px;">
-                            <summary style="cursor:pointer; font-size:12px; font-weight:600; color:#64748b; margin-bottom:8px;">
-                                ⚡ Ou selecione uma opção pré-definida rápida
+                        <details style="border-top:1px solid #e2e8f0; padding-top:12px; margin-top:14px;">
+                            <summary style="cursor:pointer; font-size:16px; font-weight:600; color:#0f172a; margin-bottom:8px;">
+                                ✍️ Ou digite uma ocorrência / observação manual avulsa
                             </summary>
-                            <div class="modal-categorias">
-                                ${categoriasAvaliacao.map(cat => `
-                                    <div class="modal-cat-group">
-                                        <small class="modal-cat-label">${cat.nome}</small>
-                                        <div class="modal-cat-buttons">
-                                            ${cat.opcoes.map(op => `
-                                                <button type="button" data-categoria="${cat.nome.toLowerCase()}" data-valor="${op.valor}" data-pontos="${op.pontos}"
-                                                    class="btn-avaliacao-modal" style="background-color:${op.cor};"
-                                                    data-professor-id="${professorId || ""}">
-                                                    ${op.label} (${op.pontos}p)
-                                                </button>
-                                            `).join('')}
-                                        </div>
+                            <div class="modal-obs-form" style="background:#ffffff; padding:14px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:8px;">
+                                <div style="margin-bottom:12px; padding:10px 12px; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
+                                    <label style="font-weight:700; color:#1e293b; display:block; font-size:12px; margin-bottom:6px;">
+                                        Tipo da observação avulsa <span style="color:#ef4444;">*</span>
+                                    </label>
+                                    <div style="display:flex; gap:16px; align-items:center;">
+                                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; font-weight:700; color:#16a34a;">
+                                            <input type="radio" name="avulso-tipo" value="positiva" checked /> 🟢 Positiva
+                                        </label>
+                                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; font-weight:700; color:#dc2626;">
+                                            <input type="radio" name="avulso-tipo" value="negativa" /> 🔴 Negativa
+                                        </label>
                                     </div>
-                                `).join('')}
+                                </div>
+
+                                <label class="modal-obs-label" style="font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">
+                                    Descrição / Motivo <span style="color:#ef4444;">*</span>
+                                </label>
+                                <input id="obs-input" type="text" placeholder="Ex: Participação em aula, Atraso, Ajuda aos colegas..."
+                                    class="form-input" style="margin-bottom:12px;" />
+
+                                <label class="modal-obs-label" style="font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">
+                                    Quantidade de PoloCoins <span style="color:#ef4444;">*</span>
+                                </label>
+                                <div class="modal-obs-row" style="margin-bottom:10px;">
+                                    <input id="pts-input" type="number" min="0" max="500" placeholder="Ex: 10"
+                                        class="form-input form-input--sm" />
+                                    <small class="text-muted text-xs">PoloCoins</small>
+                                </div>
+
+                                <p id="obs-aviso" class="alert alert-danger alert--sm" style="display:none; margin-bottom:10px;">Preencha a descrição e quantidade de PoloCoins.</p>
+                                <p id="data-auto" class="text-muted text-xs" style="margin-bottom:10px;">Data/hora automática: ${new Date().toLocaleString("pt-BR")}</p>
+
+                                <button id="btn-registrar-obs" type="button" class="btn btn-primary" style="width:100%;">
+                                    <i class="fas fa-save"></i>
+                                    Registrar Ocorrência Avulsa
+                                </button>
                             </div>
                         </details>
                     </div>
                 `
 
-                // Botões de opções pré-definidas
-                container.querySelectorAll("button[data-categoria]").forEach(btn => {
-                    btn.addEventListener("click", async () => {
-                        if (!professorId) { alert("Professor não logado."); return }
-                        const categoria = btn.getAttribute("data-categoria")
-                        const valor = btn.getAttribute("data-valor")
-                        const pid = btn.getAttribute("data-professor-id") || professorId
-                        const tipoRadio = container.querySelector('input[name="tipo-ocorrencia"]:checked')?.value || 'positiva'
-                        const pontosBase = Math.abs(parseInt(btn.getAttribute("data-pontos")) || 0)
+                // Inicializa o seletor integrado de ocorrências padrão e personalizadas
+                const seletorContainer = container.querySelector("#container-seletor-ocorrencias")
+                if (seletorContainer) {
+                    renderSeletorOcorrencias(seletorContainer, {
+                        categoriasPadrao: categoriasAvaliacao,
+                        tituloSecao: "Escolha uma Ocorrência",
+                        onSelecionarOcorrencia: async (oc) => {
+                            if (!professorId) { alert("Professor não logado."); return }
+                            
+                            // O tipo é intrínseco à ocorrência: não depende de seleção manual
+                            const tipo = oc.tipo === 'negativa' ? 'negativa' : 'positiva'
+                            const pontosBase = oc.pontos || (tipo === 'negativa' ? 10 : 20)
 
-                        try {
-                            const res = await fetch("/avaliacoes", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    alunoId,
-                                    professorId: pid,
-                                    categoria,
-                                    valor,
-                                    pontos: pontosBase,
-                                    tipo: tipoRadio,
-                                    observacao: ""
-                                }),
-                            })
-                            const data = await res.json()
-                            if (res.ok) {
-                                const sinal = tipoRadio === 'negativa' ? '-' : '+'
-                                alert(`Registrado como ${tipoRadio.toUpperCase()} (${sinal}${pontosBase} PoloCoins)!`)
-                                // Atualiza os dados locais de ocorrências sem destruir o modal
-                                const novaLista = await fetch(`/avaliacoes/${alunoId}`).then(r => r.json())
-                                novaLista.forEach(av => {
-                                    if (av.data instanceof Date) av.data = av.data.toISOString().split('T')[0]
-                                    else if (typeof av.data === 'string' && av.data.includes('T')) av.data = av.data.split('T')[0]
+                            try {
+                                const res = await fetch("/avaliacoes", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        alunoId,
+                                        professorId,
+                                        categoria: oc.categoria || 'Geral',
+                                        valor: oc.valor || oc.label,
+                                        pontos: pontosBase,
+                                        tipo: tipo,
+                                        observacao: oc.observacaoAdicional 
+                                            ? `${oc.valor || oc.label} — ${oc.observacaoAdicional}`
+                                            : (oc.descricao ? `${oc.valor || oc.label} — ${oc.descricao}` : (oc.valor || oc.label))
+                                    }),
                                 })
-                                avaliacoes = novaLista
-                                capsulaEstadoAtual = 'hoje'
-                                atualizarCapsulaNav()
-                                renderizarAbaAtual()
-                                carregarAlunos()
-                            } else {
-                                alert(data.error || "Erro ao registrar.")
+                                const data = await res.json()
+                                if (res.ok) {
+                                    const sinal = tipo === 'negativa' ? '-' : '+'
+                                    const tipoBadge = tipo === 'negativa' ? '🔴 Negativa' : '🟢 Positiva'
+                                    const tipoDesc = oc.isPersonalizada ? '⭐ Ocorrência Personalizada' : 'Ocorrência Padrão'
+                                    alert(`${tipoDesc} [${tipoBadge}]: ${oc.label || oc.valor}\n${sinal}${pontosBase} PoloCoins`)
+
+                                    // Atualiza os dados locais de ocorrências sem destruir o modal
+                                    const novaLista = await fetch(`/avaliacoes/${alunoId}`).then(r => r.json())
+                                    novaLista.forEach(av => {
+                                        if (av.data instanceof Date) av.data = av.data.toISOString().split('T')[0]
+                                        else if (typeof av.data === 'string' && av.data.includes('T')) av.data = av.data.split('T')[0]
+                                    })
+                                    avaliacoes = novaLista
+                                    capsulaEstadoAtual = 'hoje'
+                                    atualizarCapsulaNav()
+                                    renderizarAbaAtual()
+                                    carregarAlunos()
+                                } else {
+                                    alert(data.error || "Erro ao registrar.")
+                                }
+                            } catch (erro) {
+                                console.error("[AVAL] Exceção:", erro)
+                                alert("Erro de conexão ao registrar ocorrência.")
                             }
-                        } catch (erro) {
-                            console.error("[AVAL] Exceção:", erro)
-                            alert("Erro de conexão.")
                         }
                     })
-                })
+                }
 
-                // Formulário manual de registro
+                // Formulário manual de registro avulso
                 const btnObs = container.querySelector("#btn-registrar-obs")
                 if (btnObs) {
                     btnObs.addEventListener("click", async () => {
                         const obs = container.querySelector("#obs-input").value.trim()
                         const rawPts = container.querySelector("#pts-input").value
                         const pts = Math.abs(parseInt(rawPts) || 0)
-                        const tipo = container.querySelector('input[name="tipo-ocorrencia"]:checked')?.value || 'positiva'
+                        const tipo = container.querySelector('input[name="avulso-tipo"]:checked')?.value || 'positiva'
                         const aviso = container.querySelector("#obs-aviso")
 
                         if (!obs) {
@@ -544,7 +535,8 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
                             const dataRes = await res.json()
                             if (res.ok) {
                                 const sinal = tipo === 'negativa' ? '-' : '+'
-                                alert(`Ocorrência registrada com sucesso!\nTipo: ${tipo.toUpperCase()}\nValor: ${sinal}${pts} PoloCoins`)
+                                const tipoBadge = tipo === 'negativa' ? '🔴 Negativa' : '🟢 Positiva'
+                                alert(`Ocorrência Avulsa [${tipoBadge}] registrada com sucesso!\nValor: ${sinal}${pts} PoloCoins`)
                                 // Atualiza os dados locais de ocorrências sem destruir o modal
                                 const novaLista = await fetch(`/avaliacoes/${alunoId}`).then(r => r.json())
                                 novaLista.forEach(av => {
@@ -663,8 +655,8 @@ async function mostrarTodasOcorrencias() {
                         const totalPts = avs.reduce((s, av) => s + (av.pontos || 0), 0)
                         return `
                             <div style="margin-bottom:16px;">
-                                <div style="font-weight:700; color:#0f172a; margin-bottom:4px;">
-                                    <i class="fas fa-user-graduate" style="color:#3B82F6; margin-right:6px;"></i>${nome}
+                                <div style="font-weight:700; color:#0f172a; margin-bottom:4px; display:flex; align-items:center; gap:8px;">
+                                    ${AlunoAvatar({ nome, avatar: avs[0]?.aluno_avatar, tamanho: 'pequeno', formato: 'inline' })}
                                     <span class="text-muted" style="font-weight:400; font-size:12px; margin-left:8px;">${avs.length} av &middot; ${totalPts} pts</span>
                                 </div>
                                 ${avs.map(av => {

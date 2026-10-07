@@ -193,3 +193,102 @@ export async function garantirCategoriasBasicas() {
         }
     }
 }
+
+/**
+ * Busca produto por ID com categoria.
+ */
+export async function buscarProdutoPorId(id) {
+    if (!id || isNaN(Number(id))) return null;
+    const { data, error } = await supabase
+        .from('produtos')
+        .select(`
+            id,
+            nome,
+            custo_pontos,
+            categoria_id,
+            categorias (
+                id,
+                nome
+            )
+        `)
+        .eq('id', Number(id))
+        .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data) return null;
+
+    const cat = Array.isArray(data.categorias) ? data.categorias[0] : data.categorias;
+    return {
+        id: data.id,
+        nome: data.nome,
+        custo_pontos: data.custo_pontos,
+        categoria_id: data.categoria_id,
+        categoria_nome: cat?.nome ?? null
+    };
+}
+
+/**
+ * Atualiza os dados de um produto.
+ */
+export async function atualizarProduto(id, dados = {}) {
+    if (!id || isNaN(Number(id))) throw new Error('ID_OBRIGATORIO');
+    const idNum = Number(id);
+
+    const { nome, preco, custo_pontos, categoria } = dados;
+    const nomeLimpo = nome ? nome.trim() : '';
+    if (!nomeLimpo) {
+        throw new Error('CAMPOS_VAZIOS');
+    }
+
+    const pontosValor = custo_pontos !== undefined && custo_pontos !== null && custo_pontos !== ''
+        ? custo_pontos
+        : preco;
+
+    if (pontosValor === undefined || pontosValor === null || isNaN(Number(pontosValor))) {
+        throw new Error('CAMPOS_VAZIOS');
+    }
+
+    let categoria_id = null;
+    if (categoria) {
+        categoria_id = await criarCategoriaSeNecesaria(categoria);
+    }
+
+    const updateObj = {
+        nome: nomeLimpo,
+        custo_pontos: parseInt(pontosValor, 10)
+    };
+    if (categoria_id !== null) {
+        updateObj.categoria_id = categoria_id;
+    }
+
+    const { data, error } = await supabase
+        .from('produtos')
+        .update(updateObj)
+        .eq('id', idNum)
+        .select(`
+            id,
+            nome,
+            custo_pontos,
+            categoria_id,
+            categorias (
+                nome
+            )
+        `)
+        .single();
+
+    if (error) {
+        throw new Error(error.message);
+    }
+    if (!data) {
+        throw new Error('NAO_ENCONTRADO');
+    }
+
+    const cat = Array.isArray(data.categorias) ? data.categorias[0] : data.categorias;
+    return {
+        id: data.id,
+        nome: data.nome,
+        custo_pontos: data.custo_pontos,
+        categoria_id: data.categoria_id,
+        categoria_nome: cat?.nome ?? null
+    };
+}

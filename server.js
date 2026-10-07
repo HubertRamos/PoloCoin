@@ -1,9 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import { supabase } from './config/supabase.js';
-import { criarProfessor, puxarProfessores } from './services/professoresServices.js';
+import { criarProfessor, puxarProfessores, buscarProfessorPorId as buscarProfessorGeral, atualizarProfessor } from './services/professoresServices.js';
 import { criarTurma, puxarTurmas } from './services/turmasServices.js';
-import { criarAlunoComResponsavel, puxarAlunosPorTurma, puxarAvaliacoesDoAluno, atualizarSenhaAluno } from './services/alunosServices.js';
+import { criarAlunoComResponsavel, puxarAlunosPorTurma, puxarAvaliacoesDoAluno, atualizarSenhaAluno, buscarAlunoPorId, atualizarAluno } from './services/alunosServices.js';
+import { salvarAvatarAluno, CATEGORIAS_AVATARES, AVATAR_PADRAO } from './services/avatarService.js';
 import { login } from './services/authServices.js';
 import { criarAvaliacao, puxarAvaliacoesPorAluno, puxarAvaliacoesPorTurma } from './services/avaliacoesServices.js';
 import { atualizarSenhaProfessor, buscarProfessorPorId } from './services/professorServices.js';
@@ -11,7 +12,7 @@ import { puxarAlunosDoResponsavel } from './services/responsavelServices.js';
 import { puxarOcorrenciasNegativasDoResponsavel, marcarComoConsentida } from './services/responsavelOcorrenciasServices.js';
 import { puxarTurmasDoProfessor, puxarTodasTurmas, vincularTurmaProfessor, desvincularTurmaProfessor } from './services/professorTurmaServices.js';
 import { getSaldoPontos, deduzirPontos } from './services/pontosServices.js';
-import { puxarTodosProdutos, criarProduto, puxarTodasCategorias, garantirCategoriasBasicas, criarCategoriaSeNecesaria } from './services/produtosServices.js';
+import { puxarTodosProdutos, criarProduto, puxarTodasCategorias, garantirCategoriasBasicas, criarCategoriaSeNecesaria, buscarProdutoPorId, atualizarProduto } from './services/produtosServices.js';
 import { adicionarDesejo, processarDesejoComoCompra, puxarDesejosDoAluno } from './services/desejosServices.js';
 import { getFilhosComSaldos, getDesejosDosFilhos } from './services/responsavelDesejosServices.js';
 import { iniciarAgendadorRetencao, executarLimpezaGeral, obterStatusRetencao } from './services/dataRetentionService.js';
@@ -46,6 +47,45 @@ app.get('/professores', async (req, res) => {
     } catch (error) {
         console.error("ERRO AO BUSCAR PROFESSORES:", error);
         return res.status(500).json({ error: 'Erro ao buscar dados do banco.' });
+    }
+});
+
+app.get('/professores/:id', async (req, res, next) => {
+    const { id } = req.params;
+    if (!id || isNaN(Number(id))) return next();
+    try {
+        const professor = await buscarProfessorGeral(id);
+        if (!professor) {
+            return res.status(404).json({ error: 'Professor não encontrado.' });
+        }
+        return res.status(200).json(professor);
+    } catch (error) {
+        console.error("ERRO AO BUSCAR PROFESSOR:", error);
+        return res.status(500).json({ error: 'Erro ao buscar professor.' });
+    }
+});
+
+app.put('/professores/:id', async (req, res) => {
+    const { id } = req.params;
+    if (!id || isNaN(Number(id))) {
+        return res.status(400).json({ error: 'ID do professor inválido.' });
+    }
+    const { name, password } = req.body;
+    try {
+        const atualizado = await atualizarProfessor(id, { name, password });
+        return res.status(200).json({ message: 'Professor atualizado com sucesso!', professor: atualizado });
+    } catch (error) {
+        if (error.message === 'DUPLICADO') {
+            return res.status(400).json({ error: 'Este professor já está cadastrado no sistema!' });
+        }
+        if (error.message === 'CAMPOS_VAZIOS') {
+            return res.status(400).json({ error: 'Preencha o nome do professor corretamente.' });
+        }
+        if (error.message === 'NAO_ENCONTRADO') {
+            return res.status(404).json({ error: 'Professor não encontrado.' });
+        }
+        console.error("ERRO AO ATUALIZAR PROFESSOR:", error);
+        return res.status(500).json({ error: 'Erro interno ao atualizar professor.' });
     }
 });
 
@@ -105,6 +145,98 @@ app.post('/turmas/:turmaId/alunos', async (req, res) => {
     }
 });
 
+app.get('/alunos/:id', async (req, res, next) => {
+    const { id } = req.params;
+    if (!id || isNaN(Number(id))) return next();
+    try {
+        const aluno = await buscarAlunoPorId(id);
+        if (!aluno) {
+            return res.status(404).json({ error: 'Aluno não encontrado.' });
+        }
+        return res.status(200).json(aluno);
+    } catch (error) {
+        console.error("ERRO AO BUSCAR ALUNO:", error);
+        return res.status(500).json({ error: 'Erro ao buscar dados do aluno.' });
+    }
+});
+
+app.put('/alunos/:id', async (req, res) => {
+    const { id } = req.params;
+    if (!id || isNaN(Number(id))) {
+        return res.status(400).json({ error: 'ID do aluno inválido.' });
+    }
+    try {
+        const atualizado = await atualizarAluno(id, req.body);
+        return res.status(200).json({ message: 'Aluno atualizado com sucesso!', aluno: atualizado });
+    } catch (error) {
+        if (error.message === 'DUPLICADO') {
+            return res.status(400).json({ error: 'Já existe um aluno com este nome nesta turma!' });
+        }
+        if (error.message === 'CAMPOS_VAZIOS') {
+            return res.status(400).json({ error: 'Preencha o nome do aluno corretamente.' });
+        }
+        if (error.message === 'NAO_ENCONTRADO') {
+            return res.status(404).json({ error: 'Aluno não encontrado.' });
+        }
+        console.error("ERRO AO ATUALIZAR ALUNO:", error);
+        return res.status(500).json({ error: 'Erro interno ao atualizar aluno.' });
+    }
+});
+
+// Atualiza o avatar do aluno via PATCH /alunos/:id/avatar
+app.patch('/alunos/:id/avatar', async (req, res) => {
+    const { id } = req.params;
+    const { avatar } = req.body;
+    if (!id || isNaN(Number(id))) {
+        return res.status(400).json({ error: 'ID do aluno inválido.' });
+    }
+    if (!avatar) {
+        return res.status(400).json({ error: 'Avatar não fornecido.' });
+    }
+    try {
+        const resultado = await salvarAvatarAluno(id, avatar);
+        return res.status(200).json({
+            message: 'Avatar atualizado com sucesso!',
+            avatar: resultado.avatar
+        });
+    } catch (error) {
+        if (error.message === 'AVATAR_INVALIDO') {
+            return res.status(400).json({ error: 'Avatar inválido. Escolha uma das opções pré-definidas.' });
+        }
+        console.error('ERRO AO ATUALIZAR AVATAR:', error);
+        return res.status(500).json({ error: 'Erro ao salvar avatar.' });
+    }
+});
+
+// Rota auxiliar POST /aluno/avatar
+app.post('/aluno/avatar', async (req, res) => {
+    const { id, avatar } = req.body;
+    if (!id || !avatar) {
+        return res.status(400).json({ error: 'ID do aluno e avatar são obrigatórios.' });
+    }
+    try {
+        const resultado = await salvarAvatarAluno(id, avatar);
+        return res.status(200).json({
+            message: 'Avatar atualizado com sucesso!',
+            avatar: resultado.avatar
+        });
+    } catch (error) {
+        if (error.message === 'AVATAR_INVALIDO') {
+            return res.status(400).json({ error: 'Avatar inválido. Escolha uma das opções pré-definidas.' });
+        }
+        console.error('ERRO AO ATUALIZAR AVATAR:', error);
+        return res.status(500).json({ error: 'Erro ao salvar avatar.' });
+    }
+});
+
+// Lista todas as categorias de avatares disponíveis
+app.get('/avatares', (req, res) => {
+    return res.status(200).json({
+        padrao: AVATAR_PADRAO,
+        categorias: CATEGORIAS_AVATARES
+    });
+});
+
 // --- Rotas de Autenticação ---
 app.post('/login', async (req, res) => {
     const { nome, senha, tipo } = req.body;
@@ -119,6 +251,7 @@ app.post('/login', async (req, res) => {
                 id: user.id,
                 nome: user.name,
                 tipo: user.tipo,
+                avatar: user.avatar || AVATAR_PADRAO
             },
         });
     } catch (error) {
@@ -370,6 +503,41 @@ app.get('/produtos/filtrados', async (req, res) => {
     } catch (error) {
         console.error('ERRO AO BUSCAR PRODUTOS FILTRADOS:', error);
         return res.status(500).json({ error: 'Erro ao buscar produtos.' });
+    }
+});
+
+app.get('/produtos/:id', async (req, res, next) => {
+    const { id } = req.params;
+    if (!id || isNaN(Number(id))) return next();
+    try {
+        const produto = await buscarProdutoPorId(id);
+        if (!produto) {
+            return res.status(404).json({ error: 'Produto não encontrado.' });
+        }
+        return res.status(200).json(produto);
+    } catch (error) {
+        console.error("ERRO AO BUSCAR PRODUTO:", error);
+        return res.status(500).json({ error: 'Erro ao buscar produto.' });
+    }
+});
+
+app.put('/produtos/:id', async (req, res) => {
+    const { id } = req.params;
+    if (!id || isNaN(Number(id))) {
+        return res.status(400).json({ error: 'ID do produto inválido.' });
+    }
+    try {
+        const produto = await atualizarProduto(id, req.body);
+        return res.status(200).json({ message: 'Produto atualizado com sucesso!', produto });
+    } catch (error) {
+        console.error('ERRO AO ATUALIZAR PRODUTO:', error);
+        if (error.message === 'CAMPOS_VAZIOS') {
+            return res.status(400).json({ error: 'Preencha nome e custo em pontos.' });
+        }
+        if (error.message === 'NAO_ENCONTRADO') {
+            return res.status(404).json({ error: 'Produto não encontrado.' });
+        }
+        return res.status(500).json({ error: 'Erro interno ao atualizar produto.' });
     }
 });
 

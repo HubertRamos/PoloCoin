@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import { resolverAvatarAluno } from './avatarService.js';
 
 /**
  * Busca todas as compras registradas com detalhes do aluno, produto e responsável.
@@ -55,6 +56,7 @@ export async function puxarTodasCompras() {
             id: c.id,
             aluno_id: c.aluno_id,
             aluno_nome: aluno?.nome ?? null,
+            aluno_avatar: resolverAvatarAluno(c.aluno_id, aluno?.avatar),
             turma_id: aluno?.turma_id ?? null,
             serie,
             turma: turmaLetra,
@@ -140,6 +142,7 @@ export async function puxarHistoricoVendas() {
             id: c.id,
             aluno_id: c.aluno_id,
             aluno_nome: aluno?.nome ?? null,
+            aluno_avatar: resolverAvatarAluno(c.aluno_id, aluno?.avatar),
             produto_id: c.produto_id,
             produto_nome: prod?.nome ?? null,
             categoria_id: prod?.categoria_id ?? null,

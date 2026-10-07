@@ -202,7 +202,7 @@ function garantirEstilosImpressao() {
 /**
  * Abre o modal de filtros para impressão do histórico de um aluno.
  */
-export function abrirModalFiltroRelatorioAluno({ alunoId, alunoNome, turmaNome, professorNome }) {
+export function abrirModalFiltroRelatorioAluno({ alunoId, alunoNome, alunoAvatar = '🙂', turmaNome, professorNome }) {
     garantirEstilosImpressao();
 
     const overlay = document.createElement('div');
@@ -216,7 +216,7 @@ export function abrirModalFiltroRelatorioAluno({ alunoId, alunoNome, turmaNome, 
                     <h3 style="margin:0; font-size:16px; font-weight:700; color:#0f172a;">
                         <i class="fas fa-print" style="color:#3b82f6; margin-right:8px;"></i>Imprimir Histórico do Aluno
                     </h3>
-                    <small style="color:#64748b; font-size:12px;">Aluno: <strong>${alunoNome}</strong> &middot; Turma: ${turmaNome}</small>
+                    <small style="color:#64748b; font-size:12px;">Aluno: <strong>${alunoAvatar} ${alunoNome}</strong> &middot; Turma: ${turmaNome}</small>
                 </div>
                 <button id="btn-fechar-filtro-aluno" class="btn btn-secondary btn--sm" style="padding:4px 8px;">
                     <i class="fas fa-times"></i>
@@ -361,7 +361,7 @@ export async function gerarEImprimirRelatorioAluno({ alunoId, dataInicio, dataFi
                     <div style="display:flex; flex-wrap:wrap; gap: 16px; justify-content: space-between;">
                         <div>
                             <span style="font-size: 11px; text-transform: uppercase; color:#64748b; font-weight:700; display:block;">Aluno</span>
-                            <span style="font-size: 15px; font-weight: 700; color:#0f172a;">${aluno.nome}</span>
+                            <span style="font-size: 15px; font-weight: 700; color:#0f172a;">${aluno.avatar || '🙂'} ${aluno.nome}</span>
                         </div>
                         <div>
                             <span style="font-size: 11px; text-transform: uppercase; color:#64748b; font-weight:700; display:block;">Turma</span>
@@ -554,7 +554,7 @@ export function abrirModalFiltroRelatorioTurma({ turmaId, turmaNome, alunos = []
                     </div>
                     <select id="filtro-turma-aluno-select" class="filtro-input" style="display:none;">
                         <option value="">Selecione um aluno...</option>
-                        ${alunos.map(a => `<option value="${a.id}">${a.aluno_nome || a.nome}</option>`).join('')}
+                        ${alunos.map(a => `<option value="${a.id}">${a.avatar || '🙂'} ${a.aluno_nome || a.nome}</option>`).join('')}
                     </select>
                 </div>
 
@@ -694,7 +694,7 @@ export async function gerarEImprimirRelatorioTurma({ turmaId, alunoId, dataInici
                             <div class="relatorio-bloco-aluno" style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 18px; background: #ffffff;">
                                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 10px;">
                                     <h2 style="margin:0; font-size: 15px; font-weight:800; color:#0f172a;">
-                                        ALUNO: ${al.aluno_nome}
+                                        ALUNO: ${al.aluno_avatar || '🙂'} ${al.aluno_nome}
                                     </h2>
                                     <span style="font-size: 12px; color:#64748b; font-weight:600;">
                                         ${al.ocorrencias.length} ocorrência(s)

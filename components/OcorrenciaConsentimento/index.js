@@ -1,3 +1,5 @@
+import AlunoAvatar from '../AlunoAvatar/index.js';
+
 /**
  * Componente de consentimento em 2 etapas para ocorrências negativas:
  * 
@@ -406,7 +408,7 @@ export default function OcorrenciaConsentimento({ ocorrencias, indiceAtual = 0, 
                         <div style="${style.studentInfo}">
                             <span style="${style.icon}">${getIcon(oc.categoria)}</span>
                             <div>
-                                <div style="${style.studentName}">${oc.aluno_nome || 'Aluno'}</div>
+                                <div style="${style.studentName}">${AlunoAvatar({ avatar: oc.aluno_avatar, nome: oc.aluno_nome, tamanho: 'mini', formato: 'inline' })}</div>
                                 <div style="${style.studentMeta}">
                                     ${oc.serie || '?'}º${oc.turma || '?'} · ${oc.categoria || 'Geral'}
                                 </div>
@@ -545,7 +547,7 @@ export function PopupConfirmacaoCiencia({ ocorrencias, cienciaConfirmada = false
                             </div>
                             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: #64748b; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0;">
                                 <span>
-                                    Aluno: <strong>${oc.aluno_nome || 'Aluno'}</strong> ${oc.serie ? `(${oc.serie}º${oc.turma || ''})` : ''}
+                                    Aluno: <strong>${AlunoAvatar({ avatar: oc.aluno_avatar, nome: oc.aluno_nome, tamanho: 'mini', formato: 'inline' })}</strong> ${oc.serie ? `(${oc.serie}º${oc.turma || ''})` : ''}
                                 </span>
                                 <span>
                                     Registrada por: <strong>${oc.professor_nome || 'Professor'}</strong>

@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import { resolverAvatarAluno } from './avatarService.js';
 
 export async function puxarAlunosDoResponsavel(responsavelId) {
     if (!responsavelId) {
@@ -28,6 +29,7 @@ export async function puxarAlunosDoResponsavel(responsavelId) {
         return {
             id: a.id,
             aluno_nome: a.nome,
+            avatar: resolverAvatarAluno(a.id, a.avatar),
             aluno_senha: a.password,
             serie: t?.serie ?? null,
             turma: t?.turma ?? null

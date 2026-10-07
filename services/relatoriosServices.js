@@ -1,4 +1,6 @@
 import { supabase } from '../config/supabase.js';
+import { resolverTipoOcorrencia } from './avaliacoesServices.js';
+import { resolverAvatarAluno } from './avatarService.js';
 
 let suporteColunaTipo = null;
 async function checarSuporteTipo() {
@@ -90,22 +92,6 @@ export async function gerarRelatorioAluno({ alunoId, dataInicio, dataFim, tipo, 
         query = query.lte('criado_em', `${dataFim}T23:59:59.999Z`);
     }
 
-    // Filtro por tipo (positiva / negativa)
-    const tipoFiltro = (tipo || '').toLowerCase().trim();
-    if (tipoFiltro === 'positiva') {
-        if (temTipo) {
-            query = query.eq('tipo', 'positiva');
-        } else {
-            query = query.gte('pontos', 0);
-        }
-    } else if (tipoFiltro === 'negativa') {
-        if (temTipo) {
-            query = query.eq('tipo', 'negativa');
-        } else {
-            query = query.lt('pontos', 0);
-        }
-    }
-
     // Ordenação
     const asc = ordem === 'antigas';
     query = query.order('criado_em', { ascending: asc });
@@ -113,19 +99,19 @@ export async function gerarRelatorioAluno({ alunoId, dataInicio, dataFim, tipo, 
     const { data: rawOcorrencias, error: errOcorrencias } = await query;
     if (errOcorrencias) throw new Error(errOcorrencias.message);
 
-    // 3. Processamento das ocorrências e estatísticas
+    // 3. Processamento das ocorrências e estatísticas com resolução canônica de tipo
     let totalPositivas = 0;
     let totalNegativas = 0;
     let polocoinsGanhos = 0;
     let polocoinsRetirados = 0;
 
-    const ocorrencias = (rawOcorrencias || []).map(r => {
+    const todasOcorrencias = (rawOcorrencias || []).map(r => {
         const ts = r.criado_em ? new Date(r.criado_em) : null;
         const prof = Array.isArray(r.professores) ? r.professores[0] : r.professores;
-        const tipoFinal = r.tipo ? String(r.tipo).toLowerCase().trim() : (Number(r.pontos) < 0 ? 'negativa' : 'positiva');
+        const tipoFinal = resolverTipoOcorrencia(r.tipo, r.pontos, r.valor);
         const pts = Number(r.pontos) || 0;
 
-        if (tipoFinal === 'negativa' || pts < 0) {
+        if (tipoFinal === 'negativa') {
             totalNegativas++;
             polocoinsRetirados += Math.abs(pts);
         } else {
@@ -148,12 +134,18 @@ export async function gerarRelatorioAluno({ alunoId, dataInicio, dataFim, tipo, 
         };
     });
 
+    // Aplica o filtro de tipo garantindo compatibilidade com registros antigos
+    const ocorrencias = tipoFiltro && (tipoFiltro === 'positiva' || tipoFiltro === 'negativa')
+        ? todasOcorrencias.filter(o => o.tipo === tipoFiltro)
+        : todasOcorrencias;
+
     const saldoLiquido = polocoinsGanhos - polocoinsRetirados;
 
     return {
         aluno: {
             id: aluno.id,
             nome: aluno.nome,
+            avatar: resolverAvatarAluno(aluno.id, aluno.avatar),
             turma_id: aluno.turma_id,
             turma_nome: turmaNome,
             responsavel_nome: respObj?.nome ?? 'Não informado',
@@ -267,22 +259,6 @@ export async function gerarRelatorioTurma({ turmaId, alunoId, dataInicio, dataFi
         query = query.lte('criado_em', `${dataFim}T23:59:59.999Z`);
     }
 
-    // Filtro por tipo
-    const tipoFiltro = (tipo || '').toLowerCase().trim();
-    if (tipoFiltro === 'positiva') {
-        if (temTipo) {
-            query = query.eq('tipo', 'positiva');
-        } else {
-            query = query.gte('pontos', 0);
-        }
-    } else if (tipoFiltro === 'negativa') {
-        if (temTipo) {
-            query = query.eq('tipo', 'negativa');
-        } else {
-            query = query.lt('pontos', 0);
-        }
-    }
-
     // Ordenação
     const asc = ordem === 'antigas';
     query = query.order('criado_em', { ascending: asc });
@@ -290,7 +266,7 @@ export async function gerarRelatorioTurma({ turmaId, alunoId, dataInicio, dataFi
     const { data: rawOcorrencias, error: errOcorrencias } = await query;
     if (errOcorrencias) throw new Error(errOcorrencias.message);
 
-    // 4. Agrupamento por aluno e cálculo dos resumos
+    // 4. Agrupamento por aluno e cálculo dos resumos com classificação canônica
     const ocorrenciasPorAluno = new Map();
     alunoIds.forEach(id => ocorrenciasPorAluno.set(id, []));
 
@@ -302,10 +278,15 @@ export async function gerarRelatorioTurma({ turmaId, alunoId, dataInicio, dataFi
     for (const r of (rawOcorrencias || [])) {
         const ts = r.criado_em ? new Date(r.criado_em) : null;
         const prof = Array.isArray(r.professores) ? r.professores[0] : r.professores;
-        const tipoFinal = r.tipo ? String(r.tipo).toLowerCase().trim() : (Number(r.pontos) < 0 ? 'negativa' : 'positiva');
+        const tipoFinal = resolverTipoOcorrencia(r.tipo, r.pontos, r.valor);
         const pts = Number(r.pontos) || 0;
 
-        if (tipoFinal === 'negativa' || pts < 0) {
+        // Filtro canônico por tipo se especificado
+        if (tipoFiltro && (tipoFiltro === 'positiva' || tipoFiltro === 'negativa') && tipoFinal !== tipoFiltro) {
+            continue;
+        }
+
+        if (tipoFinal === 'negativa') {
             geralTotalNegativas++;
             geralPolocoinsRetirados += Math.abs(pts);
         } else {
@@ -343,7 +324,7 @@ export async function gerarRelatorioTurma({ turmaId, alunoId, dataInicio, dataFi
         let alunoRetirados = 0;
 
         for (const oc of listaOcorrencias) {
-            if (oc.tipo === 'negativa' || oc.pontos < 0) {
+            if (oc.tipo === 'negativa') {
                 alunoNeg++;
                 alunoRetirados += Math.abs(oc.pontos);
             } else {
@@ -355,6 +336,7 @@ export async function gerarRelatorioTurma({ turmaId, alunoId, dataInicio, dataFi
         alunosRelatorio.push({
             aluno_id: aluno.id,
             aluno_nome: aluno.nome,
+            aluno_avatar: resolverAvatarAluno(aluno.id, aluno.avatar),
             saldo_atual: aluno.pontos ?? 0,
             ocorrencias: listaOcorrencias,
             resumo: {

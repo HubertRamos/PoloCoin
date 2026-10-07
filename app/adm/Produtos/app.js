@@ -77,14 +77,19 @@ function renderizarCards() {
 
         return `
             <div class="card" style="border-left: 4px solid ${cor};">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div>
-                        <strong style="font-size: 15px; color: #1e293b;">${prod.nome}</strong>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                    <div style="flex: 1; min-width: 0;">
+                        <strong style="font-size: 15px; color: #1e293b; display: block;">${prod.nome}</strong>
                         <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">${cat}</div>
                     </div>
-                    <div style="text-align: right;">
+                    <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0;">
                         <div style="font-size: 18px; font-weight: 700; color: #0f172a;">${formatarPreco(preco)}</div>
-                        <div style="font-size: 11px; color: #94a3b8;">ID: ${prod.id}</div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 11px; color: #94a3b8;">ID: ${prod.id}</span>
+                            <button class="btn btn-secondary btn-editar-prod" data-id="${prod.id}" style="padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
+                                <i class="fa-solid fa-pen-to-square"></i> Editar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -99,6 +104,16 @@ function renderizarCards() {
         `
     const btnVoltar = document.getElementById('btn-voltar-compras')
     if (btnVoltar) btnVoltar.addEventListener('click', () => Render())
+
+    content.querySelectorAll('.btn-editar-prod').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = Number(btn.getAttribute('data-id'))
+            const prod = produtos.find(p => Number(p.id) === id)
+            if (prod) {
+                abrirModalAdd(prod)
+            }
+        })
+    })
 }
 
 function renderizarCompras() {
@@ -142,8 +157,13 @@ function renderizarCompras() {
     }).join('')
 }
 
-function abrirModalAdd() {
+function abrirModalAdd(produtoParaEditar = null) {
+    const isEdicao = Boolean(produtoParaEditar && produtoParaEditar.id)
     const categoriaOptions = categorias.map(c => ({ id: c.id, nome: c.nome }))
+
+    const tituloFormulario = isEdicao ? 'Editar Produto' : 'Novo Produto'
+    const textoBotao = isEdicao ? 'Salvar Alterações' : 'Novo Produto'
+    const catPreselecionada = isEdicao ? (produtoParaEditar.categoria_id || produtoParaEditar.categoria_nome) : null
 
     root.innerHTML = `
         ${Header(linksHeader)}
@@ -157,16 +177,17 @@ function abrirModalAdd() {
             </div>
 
             ${Form(
-                'Novo Produto',
+                tituloFormulario,
                 [
-                    { label: 'Nome do Produto', placeholder: 'Ex: Chocolate Amargo 50g', type: 'text', id: 'prod-nome', required: true },
-                    { label: 'Custo em PoloCoins (🪙)', placeholder: 'Ex: 50', type: 'number', id: 'prod-preco', required: true },
+                    { label: 'Nome do Produto', placeholder: 'Ex: Chocolate Amargo 50g', type: 'text', id: 'prod-nome', required: true, value: isEdicao ? (produtoParaEditar.nome || '') : '' },
+                    { label: 'Custo em PoloCoins (🪙)', placeholder: 'Ex: 50', type: 'number', id: 'prod-preco', required: true, value: isEdicao ? (produtoParaEditar.custo_pontos || '') : '' },
                 ],
-                categoriaOptions
+                categoriaOptions,
+                textoBotao,
+                catPreselecionada
             )}
 
-
-            ${UploadFile()}
+            ${!isEdicao ? UploadFile() : ''}
 
             <p id="msg" style="text-align: center; font-size: 12px; min-height: 18px; margin: 8px 0 0;"></p>
         </main>
@@ -188,7 +209,10 @@ function abrirModalAdd() {
     `
 
     const btnVoltar = document.getElementById('btn-voltar')
-    if (btnVoltar) btnVoltar.addEventListener('click', () => Render())
+    if (btnVoltar) btnVoltar.addEventListener('click', () => {
+        Render()
+        renderizarCards()
+    })
 
     const form = document.getElementById('meu-form')
     const msg = document.getElementById('msg')
@@ -208,13 +232,16 @@ function abrirModalAdd() {
                 return
             }
 
-            msg.textContent = 'Cadastrando...'
+            msg.textContent = isEdicao ? 'Salvando alterações...' : 'Cadastrando...'
             msg.style.color = '#3b82f6'
 
             try {
                 const custoPontosInt = Math.round(preco)
-                const resposta = await fetch('/produtos', {
-                    method: 'POST',
+                const url = isEdicao ? `/produtos/${produtoParaEditar.id}` : '/produtos'
+                const method = isEdicao ? 'PUT' : 'POST'
+
+                const resposta = await fetch(url, {
+                    method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         nome,
@@ -227,13 +254,16 @@ function abrirModalAdd() {
                 const dados = await resposta.json()
 
                 if (resposta.ok) {
-                    msg.textContent = '✓ Produto cadastrado com sucesso!'
+                    msg.textContent = isEdicao ? '✓ Produto atualizado com sucesso!' : '✓ Produto cadastrado com sucesso!'
                     msg.style.color = '#10B981'
                     form.reset()
                     await carregarDados()
-                    setTimeout(() => Render(), 600)
+                    setTimeout(() => {
+                        Render()
+                        renderizarCards()
+                    }, 600)
                 } else {
-                    msg.textContent = dados.error || 'Erro ao cadastrar.'
+                    msg.textContent = dados.error || (isEdicao ? 'Erro ao atualizar.' : 'Erro ao cadastrar.')
                     msg.style.color = '#ef4444'
                 }
             } catch (erro) {
@@ -672,6 +702,7 @@ window.Render = Render
 window.renderizarCards = renderizarCards
 window.renderizarHistorico = renderizarHistorico
 window.limparHistorico = limparHistorico
+window.abrirModalAdd = abrirModalAdd
 
 async function carregarHistorico() {
     try {

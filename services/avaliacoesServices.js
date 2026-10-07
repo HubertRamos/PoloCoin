@@ -1,5 +1,50 @@
 import { supabase } from '../config/supabase.js';
+import { resolverAvatarAluno } from './avatarService.js';
 import { creditarPontos, debitarPontosOcorrencia } from './pontosServices.js';
+
+export const VALORES_OCORRENCIAS_NEGATIVAS = [
+    'bagunça', 'bagunca', 'desmotivado', 'não entregou', 'nao entregou', 'conflituante',
+    'isolado', 'desinteressado', 'indiferente', 'atrasado', 'desrespeito', 'desrespeito_prof',
+    'uso_inadequado', 'uso inadequado', 'agitado', 'danificou', 'atraso'
+];
+
+export const VALORES_OCORRENCIAS_POSITIVAS = [
+    'produtivo', 'participou', 'participou_aula', 'calmo', 'comprometido',
+    'concluiu', 'concluiu_atividade', 'proativo', 'ajudou', 'ajudou_colegas',
+    'colaborador', 'líder', 'lider', 'no prazo', 'no_prazo', 'antecipou', 'elogio'
+];
+
+/**
+ * Resolve o tipo da ocorrência com garantia estrutural e migração de registros legados.
+ * A classificação das ocorrências padrão é intrínseca e canônica:
+ * "Bagunça em sala", "Desrespeito ao professor", "Não entregou atividade" etc. são SEMPRE negativas.
+ * "Participou da aula", "Ajudou colegas", "Concluiu atividade" etc. são SEMPRE positivas.
+ */
+export function resolverTipoOcorrencia(tipo, pontos, valor) {
+    const v = String(valor || '').toLowerCase().trim();
+
+    // 1. Verificação canônica pelas ocorrências padrão conhecidas (não depende de input manual)
+    if (v && VALORES_OCORRENCIAS_NEGATIVAS.some(neg => v.includes(neg))) {
+        return 'negativa';
+    }
+    if (v && VALORES_OCORRENCIAS_POSITIVAS.some(pos => v.includes(pos))) {
+        return 'positiva';
+    }
+
+    // 2. Se for ocorrência personalizada ou avulsa com tipo definido
+    if (tipo) {
+        const t = String(tipo).toLowerCase().trim();
+        if (t === 'negativa' || t === 'positiva') return t;
+    }
+
+    // 3. Pelo sinal dos pontos registrados
+    const pts = Number(pontos);
+    if (!isNaN(pts) && pts < 0) return 'negativa';
+    if (!isNaN(pts) && pts > 0) return 'positiva';
+
+    // 4. Regra de migração segura para registros legados sem tipo: padrão negativa
+    return 'negativa';
+}
 
 let suporteColunaTipo = null;
 async function checarSuporteTipo() {
@@ -147,7 +192,7 @@ export async function puxarAvaliacoesPorAluno(alunoId, professorId = null) {
     return (data || []).map(r => {
         const ts = r.criado_em ? new Date(r.criado_em) : null;
         const prof = Array.isArray(r.professores) ? r.professores[0] : r.professores;
-        const tipoFinal = r.tipo ? String(r.tipo).toLowerCase().trim() : (Number(r.pontos) < 0 ? 'negativa' : 'positiva');
+        const tipoFinal = resolverTipoOcorrencia(r.tipo, r.pontos, r.valor);
         return {
             id: r.id,
             professor_id: r.professor_id,
@@ -158,6 +203,8 @@ export async function puxarAvaliacoesPorAluno(alunoId, professorId = null) {
             observacao: r.observacao,
             data: ts ? ts.toISOString().slice(0, 10) : null,
             hora: ts ? ts.toISOString().slice(11, 19) : null,
+            aluno_id: Number(alunoId),
+            aluno_avatar: resolverAvatarAluno(Number(alunoId)),
             professor_nome: prof?.name ?? null
         };
     });
@@ -244,7 +291,7 @@ export async function puxarAvaliacoesPorTurma(turmaId) {
         const ts = a.criado_em ? new Date(a.criado_em) : null;
         const aluno = Array.isArray(a.alunos) ? a.alunos[0] : a.alunos;
         const prof = Array.isArray(a.professores) ? a.professores[0] : a.professores;
-        const tipoFinal = a.tipo ? String(a.tipo).toLowerCase().trim() : (Number(a.pontos) < 0 ? 'negativa' : 'positiva');
+        const tipoFinal = resolverTipoOcorrencia(a.tipo, a.pontos, a.valor);
         return {
             id: a.id,
             aluno_id: a.aluno_id,
@@ -257,6 +304,7 @@ export async function puxarAvaliacoesPorTurma(turmaId) {
             data: ts ? ts.toISOString().slice(0, 10) : null,
             hora: ts ? ts.toISOString().slice(11, 19) : null,
             aluno_nome: aluno?.nome ?? null,
+            aluno_avatar: resolverAvatarAluno(a.aluno_id, aluno?.avatar),
             professor_nome: prof?.name ?? null
         };
     });

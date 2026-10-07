@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase.js';
 import { processarDesejoComoCompra } from './desejosServices.js';
+import { resolverAvatarAluno } from './avatarService.js';
 
 /**
  * Busca desejos pendentes de um aluno.
@@ -114,6 +115,7 @@ export async function getFilhosComSaldos(responsavelId) {
         return {
             id: a.id,
             nome: a.nome,
+            avatar: resolverAvatarAluno(a.id, a.avatar),
             pontos: a.pontos,
             pode_comprar: podeComprarBool,
             turma_id: a.turma_id,
@@ -144,7 +146,11 @@ export async function getDesejosDosFilhos(responsavelId) {
     for (const filho of (filhos || [])) {
         const desejos = await puxarDesejosDoAluno(filho.id);
         resultado.push({
-            aluno: filho,
+            aluno: {
+                id: filho.id,
+                nome: filho.nome,
+                avatar: resolverAvatarAluno(filho.id, filho.avatar)
+            },
             desejos: desejos
         });
     }

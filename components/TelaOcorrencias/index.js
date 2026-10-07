@@ -1,3 +1,5 @@
+import AlunoAvatar from '../AlunoAvatar/index.js';
+
 export default async function TelaOcorrencias(root, alunoId) {
     root.innerHTML = `
         <div class="resp-dashboard">
@@ -52,9 +54,9 @@ export default async function TelaOcorrencias(root, alunoId) {
                         <div class="ocorrencia-card" style="border-left-color: ${getCorOcorrencia(oc.valor)};">
                             <div class="ocorrencia-card__top">
                                 <div class="ocorrencia-card__info">
-                                    <span class="ocorrencia-card__emoji">📌</span>
+                                    ${AlunoAvatar({ avatar: oc.aluno_avatar, nome: oc.aluno_nome, tamanho: 'pequeno', formato: 'avatar-only' })}
                                     <div>
-                                        <strong class="ocorrencia-card__aluno">${oc.aluno_nome || 'Aluno'}</strong>
+                                        <strong class="ocorrencia-card__aluno">${AlunoAvatar({ avatar: oc.aluno_avatar, nome: oc.aluno_nome, tamanho: 'mini', formato: 'inline' })}</strong>
                                         <span class="ocorrencia-card__meta">
                                             ${oc.serie || '?'}º${oc.turma || '?'} · ${oc.categoria || 'Geral'}
                                         </span>

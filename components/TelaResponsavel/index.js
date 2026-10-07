@@ -1,3 +1,5 @@
+import AlunoAvatar from '../AlunoAvatar/index.js';
+
 /**
  * Renderiza o dashboard do responsável (filhos + desejos)
  * Permite aprovação de pedidos da Lista de Desejos e controle de permissões de compra.
@@ -201,15 +203,14 @@ export async function renderDashboard(root) {
                 `;
             } else {
                 filhosGrid.innerHTML = filhos.map(filho => {
-                    const inicial = (filho.nome || '?')[0].toUpperCase();
                     const statusClass = filho.pode_comprar ? 'filho-status--liberado' : 'filho-status--bloqueado';
                     const statusText = filho.pode_comprar ? '✅ Liberado' : '🔒 Bloqueado';
                     return `
                         <div class="filho-card">
                             <div class="filho-card__top">
-                                <div class="filho-avatar">${inicial}</div>
+                                ${AlunoAvatar({ aluno: filho, tamanho: 'medio', formato: 'avatar-only' })}
                                 <div class="filho-info">
-                                    <h3 class="filho-nome">${filho.nome}</h3>
+                                    <h3 class="filho-nome">${AlunoAvatar({ aluno: filho, tamanho: 'pequeno', formato: 'inline' })}</h3>
                                     <span class="filho-meta">
                                         ${filho.serie || '?'}º${filho.turma || '?'} · ID ${filho.id}
                                     </span>
@@ -261,7 +262,7 @@ export async function renderDashboard(root) {
                                 <div class="desejo-info">
                                     <h3 class="desejo-nome">${nomeProd}</h3>
                                     <span class="desejo-meta">
-                                        Filho: <strong>${desejo.aluno?.nome || '—'}</strong> · 🪙 ${custo} PoloCoins
+                                        Filho: <strong>${AlunoAvatar({ aluno: desejo.aluno, tamanho: 'mini', formato: 'inline' })}</strong> · 🪙 ${custo} PoloCoins
                                     </span>
                                 </div>
                                 <div class="desejo-preco">

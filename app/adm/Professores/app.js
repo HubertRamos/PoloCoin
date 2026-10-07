@@ -6,13 +6,9 @@ import { linksHeader } from '../constLinks.js'
 
 const root = document.getElementById('root')
 
-// Estado para controlar se o painel de cadastro/upload está aberto ou fechado
+// Estado para controlar se o painel de cadastro/upload está aberto ou fechado e se está em modo de edição
 let mostrarPainel = false
-
-const inputs = [
-    { label: 'Nome', placeholder: 'Nome do professor', type: 'text', id: 'name-input', required: true },
-    { label: 'Senha', placeholder: 'Senha de acesso', type: 'password', id: 'password-input', required: true },
-]
+let professorEmEdicao = null
 
 async function carregarDashboard() {
     const contentDiv = document.getElementById('dashboard-content')
@@ -58,9 +54,28 @@ async function carregarDashboard() {
                         </small>
                     </div>
                 </div>
-                <span class="badge badge-neutral" style="font-size: 11px;">ID: ${prof.id}</span>
+                <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                    <span class="badge badge-neutral" style="font-size: 11px;">ID: ${prof.id}</span>
+                    <button class="btn btn-secondary btn-editar-prof" data-id="${prof.id}" data-name="${(prof.name || '').replace(/"/g, '&quot;')}" style="padding: 5px 12px; font-size: 12px; display: flex; align-items: center; gap: 5px;">
+                        <i class="fa-solid fa-pen-to-square"></i> Editar
+                    </button>
+                </div>
             </div>
         `).join('')
+
+        // Adiciona listeners nos botões de edição de cada professor
+        contentDiv.querySelectorAll('.btn-editar-prof').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-id')
+                const name = btn.getAttribute('data-name')
+                professorEmEdicao = { id, name }
+                mostrarPainel = true
+                Render()
+                // Rola suavemente até o formulário
+                const formDiv = document.getElementById('meu-form')
+                if (formDiv) formDiv.scrollIntoView({ behavior: 'smooth' })
+            })
+        })
 
     } catch (erro) {
         console.error('Erro ao carregar dashboard:', erro)
@@ -74,6 +89,19 @@ async function carregarDashboard() {
 }
 
 function Render() {
+    const isEdicao = Boolean(professorEmEdicao && professorEmEdicao.id)
+
+    const inputsAtuais = isEdicao ? [
+        { label: 'Nome', placeholder: 'Nome do professor', type: 'text', id: 'name-input', required: true, value: professorEmEdicao.name || '' },
+        { label: 'Senha', placeholder: 'Nova senha (deixe em branco para manter a atual)', type: 'password', id: 'password-input', required: false, value: '' },
+    ] : [
+        { label: 'Nome', placeholder: 'Nome do professor', type: 'text', id: 'name-input', required: true, value: '' },
+        { label: 'Senha', placeholder: 'Senha de acesso', type: 'password', id: 'password-input', required: true, value: '' },
+    ]
+
+    const tituloFormulario = isEdicao ? 'Editar Professor' : 'Cadastrar Professor'
+    const textoBotao = isEdicao ? 'Salvar Alterações' : 'Cadastrar Professor'
+
     root.innerHTML = `
         ${Header(linksHeader)}
 
@@ -115,17 +143,23 @@ function Render() {
                     ${DashBoard('Tabela de Professores', false, false)}
                 </div>
 
-                <!-- Painel de Cadastro e Upload -->
+                <!-- Painel de Cadastro/Edição e Upload -->
                 ${mostrarPainel ? `
                     <div style="flex: 1; min-width: 300px; width: 100%;">
-                        <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            ${isEdicao ? `
+                                <span class="badge badge-info" style="font-size: 12px; padding: 4px 8px;">
+                                    <i class="fa-solid fa-pen" style="font-size: 10px; margin-right: 4px;"></i>
+                                    Editando ID: ${professorEmEdicao.id}
+                                </span>
+                            ` : `<span></span>`}
                             <button id="btn-fechar" class="btn btn-danger" style="padding: 6px 12px; font-size: 13px;">
                                 <i class="fa-solid fa-xmark" style="font-size: 11px;"></i>
                                 Fechar
                             </button>
                         </div>
-                        ${Form('Cadastrar Professor', inputs)}
-                        ${UploadFile()}
+                        ${Form(tituloFormulario, inputsAtuais, [], textoBotao)}
+                        ${!isEdicao ? UploadFile() : ''}
                     </div>
                 ` : ''}
             </div>
@@ -164,19 +198,21 @@ function Render() {
 
     carregarDashboard()
 
-    // Botão "+ Adicionar" do Dashboard abre o painel
+    // Botão "+ Adicionar" do Dashboard abre o painel no modo cadastro
     const btnAdd = document.getElementById('btn-add-item')
     if (btnAdd) {
         btnAdd.addEventListener('click', () => {
+            professorEmEdicao = null
             mostrarPainel = true
             Render()
         })
     }
 
-    // Botão "X" fecha o painel
+    // Botão "X" fecha o painel e reseta o modo de edição
     const btnFechar = document.getElementById('btn-fechar')
     if (btnFechar) {
         btnFechar.addEventListener('click', () => {
+            professorEmEdicao = null
             mostrarPainel = false
             Render()
         })
@@ -256,8 +292,12 @@ function Render() {
 
 async function enviarParaBackend(name, password, formElement) {
     try {
-        const resposta = await fetch('/cadastrar', {
-            method: 'POST',
+        const isEdicao = Boolean(professorEmEdicao && professorEmEdicao.id)
+        const url = isEdicao ? `/professores/${professorEmEdicao.id}` : '/cadastrar'
+        const method = isEdicao ? 'PUT' : 'POST'
+
+        const resposta = await fetch(url, {
+            method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, password })
         })
@@ -270,13 +310,17 @@ async function enviarParaBackend(name, password, formElement) {
                 const feedback = document.createElement('div')
                 feedback.className = 'alert alert-success'
                 feedback.style.marginTop = '12px'
-                feedback.innerHTML = '✓ Professor cadastrado com sucesso!'
+                feedback.innerHTML = isEdicao
+                    ? '✓ Professor atualizado com sucesso!'
+                    : '✓ Professor cadastrado com sucesso!'
                 formContainer.appendChild(feedback)
                 setTimeout(() => feedback.remove(), 3000)
             }
 
             if (formElement) formElement.reset()
-            carregarDashboard()
+            professorEmEdicao = null
+            mostrarPainel = false
+            Render()
         } else {
             alert(resultado.error || 'Ocorreu um erro.')
         }

@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import { resolverAvatarAluno } from './avatarService.js';
 
 /**
  * Mapeia cada tabela para o nome da coluna de identificação.
@@ -53,7 +54,13 @@ export async function login(nome, senha, tipo) {
             return null;
         }
 
-        return { id: data.id, name: data[coluna], tipo };
+        return {
+            id: data.id,
+            name: data[coluna],
+            nome: data[coluna],
+            avatar: tipo === 'aluno' ? resolverAvatarAluno(data.id, data.avatar) : undefined,
+            tipo
+        };
     } catch (err) {
         console.error('Exceção capturada no login:', err);
         return null;

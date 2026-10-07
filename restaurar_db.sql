@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS alunos (
     password VARCHAR(255) NOT NULL,
     pontos INT NOT NULL DEFAULT 0 CHECK (pontos >= 0),
     pode_comprar BOOLEAN NOT NULL DEFAULT false,
+    avatar VARCHAR(20) DEFAULT '🙂',
     criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(turma_id, nome)
 );

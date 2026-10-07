@@ -1,4 +1,6 @@
 import Header from "../../../components/Header/index.js"
+import AlunoAvatar from "../../../components/AlunoAvatar/index.js"
+import { renderSeletorOcorrencias } from "../../../components/OcorrenciasPersonalizadas/index.js"
 
 const root = document.getElementById("root")
 
@@ -90,15 +92,13 @@ async function carregarDadosDoAluno() {
             <div class="card card--lg">
                 <div class="card__header">
                     <h2 class="card__title-lg">Painel do Aluno</h2>
-                    <div class="card__badge">
-                        <i class="fas fa-user-graduate"></i>
-                    </div>
+                    ${AlunoAvatar({ aluno: alunoEncontrado, tamanho: 'grande', formato: 'avatar-only' })}
                 </div>
                 <hr class="card__divider" />
                 <div class="card__info-grid">
                     <div class="card__info-item">
                         <span class="card__info-label">Nome</span>
-                        <span class="card__info-value">${alunoEncontrado.aluno_nome}</span>
+                        <span class="card__info-value">${AlunoAvatar({ aluno: alunoEncontrado, tamanho: 'pequeno', formato: 'inline' })}</span>
                     </div>
                     <div class="card__info-item">
                         <span class="card__info-label">Responsável</span>
@@ -138,36 +138,22 @@ async function carregarDadosDoAluno() {
 
                 <div class="card__section">
                     <h3 class="card__section-title">
-                        <i class="fas fa-plus-circle"></i>
-                        Nova avaliação
+                        <i class="fas fa-list-check"></i>
+                        Opções de Ocorrência
                     </h3>
 
-                    <div class="avaliacoes-grid">
-                        ${categoriasAvaliacao.map(cat => `
-                            <div class="avaliacao-cat">
-                                <small class="avaliacao-cat__label">${cat.nome}</small>
-                                <div class="avaliacao-cat__buttons">
-                                    ${cat.opcoes.map(op => `
-                                        <button data-categoria="${cat.nome.toLowerCase()}" data-valor="${op.valor}"
-                                            class="btn-avaliacao" style="background-color: ${op.cor};"
-                                            data-professor-id="${professorId || ""}">
-                                            ${op.label}
-                                        </button>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
+                    <!-- Seletor com Ocorrências Padrão e Personalizadas (Tipo Automático e Inerente) -->
+                    <div id="painel-seletor-ocorrencias"></div>
                 </div>
 
                 <div class="card__section card__section--obs">
                     <h3 class="card__section-title">
                         <i class="fas fa-pen"></i>
-                        Nova Ocorrência / Observação
+                        Nova Ocorrência / Observação Manual
                     </h3>
                     <div style="background:#f8fafc; padding:10px 12px; border-radius:6px; border:1px solid #e2e8f0; margin-bottom:12px;">
                         <label style="display:block; font-size:12px; font-weight:700; color:#1e293b; margin-bottom:6px;">
-                            Tipo da ocorrência <span style="color:#ef4444;">*</span>
+                            Tipo da observação avulsa <span style="color:#ef4444;">*</span>
                         </label>
                         <div style="display:flex; gap:16px; align-items:center;">
                             <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:600; color:#16a34a;">
@@ -200,37 +186,50 @@ async function carregarDadosDoAluno() {
             </div>
         `
 
-        const agora = new Date()
-        document.getElementById("data-input").value = agora.toISOString().split("T")[0]
-        document.getElementById("hora-input").value = agora.toTimeString().slice(0, 5)
+        const seletorContainer = document.getElementById("painel-seletor-ocorrencias")
+        if (seletorContainer) {
+            renderSeletorOcorrencias(seletorContainer, {
+                categoriasPadrao: categoriasAvaliacao,
+                tituloSecao: "Escolha uma Ocorrência",
+                onSelecionarOcorrencia: async (oc) => {
+                    const pid = professorId
+                    const tipo = oc.tipo === 'negativa' ? 'negativa' : 'positiva'
+                    const pontos = oc.pontos || (tipo === 'negativa' ? 10 : 20)
 
-        document.querySelectorAll("button[data-categoria]").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                const categoria = btn.getAttribute("data-categoria")
-                const valor = btn.getAttribute("data-valor")
-                const pid = btn.getAttribute("data-professor-id") || professorId
-                const tipo = document.querySelector('input[name="painel-tipo-ocorrencia"]:checked')?.value || 'positiva'
+                    if (!pid) { alert("Professor não logado."); return }
 
-                if (!pid) { alert("Professor não logado."); return }
-
-                try {
-                    const res = await fetch("/avaliacoes", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ alunoId, professorId: pid, categoria, valor, pontos: 10, tipo, observacao: "" }),
-                    })
-                    const data = await res.json()
-                    if (res.ok) {
-                        alert(`Registrado como ${tipo.toUpperCase()}: ${capitalizar(categoria)} → ${btn.textContent}`)
-                        carregarDadosDoAluno()
-                    } else {
-                        alert(data.error || "Erro ao registrar.")
+                    try {
+                        const res = await fetch("/avaliacoes", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                alunoId,
+                                professorId: pid,
+                                categoria: oc.categoria || 'Geral',
+                                valor: oc.valor || oc.label,
+                                pontos: pontos,
+                                tipo: tipo,
+                                observacao: oc.observacaoAdicional 
+                                    ? `${oc.valor || oc.label} — ${oc.observacaoAdicional}`
+                                    : (oc.descricao ? `${oc.valor || oc.label} — ${oc.descricao}` : "")
+                            }),
+                        })
+                        const data = await res.json()
+                        if (res.ok) {
+                            const sinal = tipo === 'negativa' ? '-' : '+'
+                            const badge = oc.isPersonalizada ? '⭐ Personalizada' : 'Padrão'
+                            const tipoLabel = tipo === 'negativa' ? '🔴 NEGATIVA' : '🟢 POSITIVA'
+                            alert(`Registrado como ${tipoLabel} (${sinal}${pontos} PoloCoins) [${badge}]: ${oc.label || oc.valor}`)
+                            carregarDadosDoAluno()
+                        } else {
+                            alert(data.error || "Erro ao registrar.")
+                        }
+                    } catch (erro) {
+                        alert("Não foi possível conectar ao servidor.")
                     }
-                } catch (erro) {
-                    alert("Não foi possível conectar ao servidor.")
                 }
             })
-        })
+        }
 
         document.getElementById("btn-registrar-obs").addEventListener("click", async () => {
             const obs = document.getElementById("obs-input").value.trim()

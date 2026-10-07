@@ -2,9 +2,11 @@ import TelaLoja from '../TelaLoja/index.js'
 import TelaCarrinho from '../TelaCarrinho/index.js'
 import TelaOcorrencias from '../TelaOcorrencias/index.js'
 import TelaEditarSenha from '../TelaSenha/index.js'
+import TelaPerfil from '../TelaPerfil/index.js'
 
 export default function MenuLateral(buttons = {}, user = {}) {
     const iconesPadrao = {
+        perfil: '👤',
         loja: '🛒',
         carrinho: '🛍️',
         ocorrencias: '📋',
@@ -28,6 +30,9 @@ export default function MenuLateral(buttons = {}, user = {}) {
             </div>`;
         try {
             switch (tela) {
+                case 'perfil':
+                    await TelaPerfil(conteudo, user.id);
+                    break;
                 case 'loja':
                     await TelaLoja(conteudo, user.id);
                     break;
@@ -87,9 +92,9 @@ export default function MenuLateral(buttons = {}, user = {}) {
                 </span>
             </button>
             <aside class="polocoin-sidebar" id="sidebar">
-                <div class="polocoin-sidebar__header">
-                    <div class="polocoin-sidebar__avatar">
-                        <span>🧑‍🎓</span>
+                <div class="polocoin-sidebar__header" style="cursor: pointer;" onclick="window.navegarPara('perfil')" title="Ver Meu Perfil e Avatar">
+                    <div class="polocoin-sidebar__avatar" id="sidebar-aluno-avatar" style="font-size: 28px; background: #e0f2fe; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.08); transition: transform 0.2s ease;">
+                        <span>${user.avatar || '🙂'}</span>
                     </div>
                     <div class="polocoin-sidebar__user-name">${user.nome || 'Aluno'}</div>
                 </div>

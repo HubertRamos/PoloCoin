@@ -1,4 +1,5 @@
 import Header from '../../../components/Header/index.js'
+import AlunoAvatar from '../../../components/AlunoAvatar/index.js'
 import { linksHeader } from '../constLinks.js'
 
 const root = document.getElementById('root')
@@ -218,7 +219,7 @@ function imprimirPendentes() {
                 <tbody>
                     ${compras.map(c => `
                         <tr>
-                            <td>${c.aluno_nome || '-'}</td>
+                            <td>${AlunoAvatar({ avatar: c.aluno_avatar, nome: c.aluno_nome, tamanho: 'mini', formato: 'inline' })}</td>
                             <td>${c.produto_nome || '-'}</td>
                             <td>${c.categoria_nome || '-'}</td>
                             <td>${c.turma_nome || '-'}</td>
@@ -391,7 +392,7 @@ function renderizarCompras() {
                         <div>
                             <strong style="font-size: 14px; color: #1e293b;">${c.produto_nome}</strong>
                             <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
-                                Aluno: ${c.aluno_nome} · 🪙 ${c.custo_pontos} pontos
+                                Aluno: ${AlunoAvatar({ avatar: c.aluno_avatar, nome: c.aluno_nome, tamanho: 'mini', formato: 'inline' })} · 🪙 ${c.custo_pontos} pontos
                             </div>
                             ${c.categoria_nome ? `<div style="font-size: 11px; color: #64748b; margin-top: 2px;">📁 ${c.categoria_nome}</div>` : ''}
                             ${c.turma_nome ? `<div style="font-size: 11px; color: #64748b; margin-top: 2px;">🏫 ${c.turma_nome}</div>` : ''}

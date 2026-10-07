@@ -262,12 +262,23 @@ export default async function TelaLoja(root, alunoId) {
 
     async function carregarProdutos(cat, busca) {
         try {
-            const res = await fetch(`/produtos/filtrados?categoria=${encodeURIComponent(cat)}&busca=${encodeURIComponent(busca)}`);
-            const produtos = await res.json();
+            const res = await fetch(`/produtos/filtrados?categoria=${encodeURIComponent(cat || '')}&busca=${encodeURIComponent(busca || '')}`);
+            const data = await res.json();
+            const produtos = Array.isArray(data) ? data : [];
 
             document.getElementById('loja-loading').style.display = 'none';
             document.getElementById('loja-produtos').style.display = 'block';
             document.getElementById('loja-contagem').textContent = `(${produtos.length} itens)`;
+
+            if (produtos.length === 0) {
+                document.getElementById('loja-grid').innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #64748b;">
+                        Nenhum produto encontrado.
+                    </div>
+                `;
+                return;
+            }
+
             document.getElementById('loja-grid').innerHTML = produtos.map(p => {
                 const cor = getCorCategoria(p.categoria_nome) || '#64748B';
                 const custo = p.custo_pontos ?? 0;
