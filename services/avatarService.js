@@ -78,7 +78,9 @@ export const TODOS_AVATARES = new Set(
 );
 
 // Fallback de persistência local (assegura compatibilidade mesmo antes da migration SQL)
-const ARQUIVO_FALLBACK = path.resolve('data/alunos_avatars.json');
+const ARQUIVO_FALLBACK = process.env.VERCEL
+    ? path.resolve('/tmp/alunos_avatars.json')
+    : path.resolve('data/alunos_avatars.json');
 let cacheAvataresLocal = null;
 
 function carregarCacheLocal() {

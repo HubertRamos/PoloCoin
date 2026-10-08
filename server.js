@@ -21,6 +21,17 @@ import { gerarRelatorioAluno, gerarRelatorioTurma } from './services/relatoriosS
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Normaliza rotas para suportar chamadas com ou sem prefixo /api na Vercel
+app.use((req, res, next) => {
+    if (req.url === '/api') {
+        req.url = '/';
+    } else if (req.url.startsWith('/api/')) {
+        req.url = req.url.substring(4);
+    }
+    next();
+});
+
 app.use(express.static('.'));
 
 // --- Rotas de Professores ---
@@ -1077,15 +1088,25 @@ app.post('/admin/retencao-dados/executar', async (req, res) => {
     }
 });
 
-// Inicialização segura do servidor
-const PORT = 3000;
-garantirCategoriasBasicas()
-    .catch((err) => {
-        console.warn('Aviso: Verifique conexão com Supabase (SUPABASE_URL e SUPABASE_KEY):', err.message);
-    })
-    .finally(() => {
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log(`Servidor ativo na porta ${PORT}`);
-            iniciarAgendadorRetencao();
+// Inicialização do servidor (condicional para suportar Vercel Serverless Functions)
+const isVercel = Boolean(process.env.VERCEL);
+const PORT = process.env.PORT || 3000;
+
+if (!isVercel) {
+    garantirCategoriasBasicas()
+        .catch((err) => {
+            console.warn('Aviso: Verifique conexão com Supabase (SUPABASE_URL e SUPABASE_KEY):', err?.message);
+        })
+        .finally(() => {
+            app.listen(PORT, '0.0.0.0', () => {
+                console.log(`Servidor ativo na porta ${PORT}`);
+                iniciarAgendadorRetencao();
+            });
         });
-    });
+} else {
+    // Na Vercel (Serverless), executa apenas a sincronização básica sem travar o handler
+    garantirCategoriasBasicas().catch(() => {});
+}
+
+export default app;
+export { app };
