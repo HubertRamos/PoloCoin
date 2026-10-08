@@ -82,12 +82,16 @@ export async function puxarAlunosPorTurma(turmaId) {
         id,
         nome,
         avatar,
+        pontos,
+        pode_comprar,
         responsaveis (
             nome
         )
     ` : `
         id,
         nome,
+        pontos,
+        pode_comprar,
         responsaveis (
             nome
         )
@@ -109,6 +113,8 @@ export async function puxarAlunosPorTurma(turmaId) {
             id: a.id,
             aluno_nome: a.nome,
             avatar: resolverAvatarAluno(a.id, a.avatar),
+            pontos: a.pontos ?? 0,
+            pode_comprar: a.pode_comprar ?? false,
             responsavel_nome: resp?.nome ?? null
         };
     });

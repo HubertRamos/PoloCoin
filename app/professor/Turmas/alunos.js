@@ -3,6 +3,9 @@ import Header from "../../../components/Header/index.js"
 import AlunoAvatar from "../../../components/AlunoAvatar/index.js"
 import { abrirModalFiltroRelatorioAluno, abrirModalFiltroRelatorioTurma } from "./relatorios.js"
 import { renderSeletorOcorrencias } from "../../../components/OcorrenciasPersonalizadas/index.js"
+import Toast from "../../../components/Toast/index.js"
+import { SkeletonCardAluno } from "../../../components/Skeleton/index.js"
+import { debounce } from "../../../utils/helpers.js"
 
 const root = document.getElementById("root")
 const params = new URLSearchParams(window.location.search)
@@ -16,13 +19,14 @@ let isModalOpen = false
 let currentModalRequestId = 0
 let lastActiveElementBeforeModal = null
 let activeModalKeydownHandler = null
+let cacheAlunosTurma = []
 
 function fecharModal() {
     currentModalRequestId++
     isModalOpen = false
 
     // Remove todos os overlays de modal da tela
-    const overlays = document.querySelectorAll(".modal-overlay, #modal-overlay")
+    const overlays = document.querySelectorAll(".modal-overlay, #modal-overlay, .polocoin-modal-overlay")
     overlays.forEach(overlay => overlay.remove())
 
     // Remove listener de teclado para evitar vazamento
@@ -55,83 +59,96 @@ async function carregarCategoriasAvaliacao() {
 
 carregarCategoriasAvaliacao().then(() => console.log("[DEBUG] Categorias carregadas:", categoriasAvaliacao.length))
 
+function renderizarGridAlunos(alunosParaExibir) {
+    const contentDiv = document.getElementById("dashboard-content")
+    if (!contentDiv) return
+
+    if (!alunosParaExibir || alunosParaExibir.length === 0) {
+        contentDiv.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1; padding: 40px 20px; text-align: center;">
+                <div class="empty-state__icon">🔍</div>
+                <h3 style="font-size: 16px; color: #0f172a; margin-bottom: 6px;">Nenhum aluno encontrado</h3>
+                <p style="color: #64748b; font-size: 13px;">Tente ajustar o termo da busca ou verifique a turma.</p>
+            </div>
+        `
+        return
+    }
+
+    contentDiv.innerHTML = alunosParaExibir.map(aluno => `
+        <div class="card card--hover" data-id="${aluno.id}" tabindex="0" role="button" aria-label="Ver ocorrências de ${aluno.aluno_nome}" style="cursor:pointer;">
+            <div class="card__header-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+                    ${AlunoAvatar({ aluno, tamanho: 'medio', formato: 'avatar-only' })}
+                    <div class="card__body" style="min-width: 0;">
+                        <strong class="card__title" style="font-size: 15px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            ${AlunoAvatar({ aluno, tamanho: 'pequeno', formato: 'inline' })}
+                        </strong>
+                        <small class="card__meta" style="color: #64748b; font-size: 12px; display: block; margin-top: 2px;">
+                            ${aluno.responsavel_nome ? `Resp: ${aluno.responsavel_nome}` : 'Sem resp. vinculado'}
+                        </small>
+                        <div style="margin-top: 6px; font-weight: 700; color: #d97706; font-size: 13px; font-variant-numeric: tabular-nums;">
+                            🪙 ${aluno.pontos ?? 0} PoloCoins
+                        </div>
+                    </div>
+                </div>
+                <div class="card__arrow card__arrow--green" style="color: #10b981; font-size: 14px;">
+                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                </div>
+            </div>
+        </div>
+    `).join('')
+
+    document.querySelectorAll(".card--hover[data-id]").forEach(card => {
+        const acionar = () => {
+            const alunoId = card.getAttribute("data-id")
+            console.log("[AVAL] Card clicado — alunoId:", alunoId)
+            abrirModalAluno(alunoId)
+        }
+        card.addEventListener("click", acionar)
+        card.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                acionar()
+            }
+        })
+    })
+}
+
 async function carregarAlunos() {
     const contentDiv = document.getElementById("dashboard-content")
     if (!contentDiv) return
 
     if (!turmaId) {
         contentDiv.innerHTML = `<div class="alert alert-danger">Turma não especificada.</div>`
+        Toast.error("Turma não especificada.")
         return
     }
 
+    // Exibe Skeleton Loading instantaneamente para evitar tela congelada
+    contentDiv.innerHTML = SkeletonCardAluno(6)
+
     try {
-      const resposta = await fetch(`/turmas/${turmaId}/alunos`)
-      const alunos = await resposta.json()
+        const resposta = await fetch(`/turmas/${turmaId}/alunos`)
+        const alunos = await resposta.json()
 
-      const alunosComSaldo = await Promise.all(
-          alunos.map(async (aluno) => {
-              try {
-                  const saldoRes = await fetch(`/aluno/saldo?id=${aluno.id}`)
-                  const saldo = await saldoRes.json()
-
-                  return {
-                      ...aluno,
-                      pontos: saldo.pontos || 0
-                  }
-              } catch {
-                  return {
-                      ...aluno,
-                      pontos: 0
-                  }
-              }
-          })
-      )
-
-        if (alunos.length === 0) {
-            contentDiv.innerHTML = `<div class="alert alert-info">Nenhum aluno cadastrado nesta turma ainda.</div>`
-            return
+        if (!Array.isArray(alunos)) {
+            throw new Error(alunos.error || "Formato de alunos inválido")
         }
 
-        contentDiv.innerHTML = alunosComSaldo.map(aluno => `
-            <div class="card card--hover" data-id="${aluno.id}" tabindex="0" role="button" aria-label="Ver ocorrências de ${aluno.aluno_nome}" style="cursor:pointer;">
-                <div class="card__header-row">
-                    ${AlunoAvatar({ aluno, tamanho: 'medio', formato: 'avatar-only' })}
-                    <div class="card__body">
-                        <strong class="card__title">${AlunoAvatar({ aluno, tamanho: 'pequeno', formato: 'inline' })}</strong>
-                        <small class="card__meta">Responsável: ${aluno.responsavel_nome}</small>
-                        <div style="
-                            margin-top:8px;
-                            font-weight:600;
-                            color:#f59e0b;
-                        ">
-                            🪙 ${aluno.pontos} PoloCoins
-                        </div>
-                    </div>
-                    <div class="card__arrow card__arrow--green">
-                        <i class="fas fa-arrow-right"></i>
-                    </div>
-                </div>
-            </div>
-        `).join('')
+        cacheAlunosTurma = alunos.map(a => ({
+            ...a,
+            pontos: Number(a.pontos ?? 0)
+        }))
 
-        document.querySelectorAll(".card--hover[data-id]").forEach(card => {
-            const acionar = () => {
-                const alunoId = card.getAttribute("data-id")
-                console.log("[AVAL] Card clicado — alunoId:", alunoId)
-                abrirModalAluno(alunoId)
-            }
-            card.addEventListener("click", acionar)
-            card.addEventListener("keydown", (e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    acionar()
-                }
-            })
-        })
-        console.log("[AVAL] Cards renderizados:", document.querySelectorAll(".card--hover").length)
+        renderizarGridAlunos(cacheAlunosTurma)
+
+        // Atualiza contagem no cabeçalho se houver elemento
+        const countEl = document.getElementById("turma-alunos-count")
+        if (countEl) countEl.textContent = `(${cacheAlunosTurma.length} alunos)`
     } catch (erro) {
         console.error("Erro ao carregar alunos:", erro)
         contentDiv.innerHTML = `<div class="alert alert-danger">Erro ao carregar os alunos do servidor.</div>`
+        Toast.error("Erro de conexão ao carregar a lista de alunos.")
     }
 }
 
@@ -191,19 +208,6 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
             const m = parts.find(p => p.type === 'month').value
             const d = parts.find(p => p.type === 'day').value
             return `${y}-${m}-${d}`
-        }
-
-        function formatarDataBR(dataStr) {
-            if (!dataStr) return ''
-            if (typeof dataStr === 'string' && dataStr.includes('-')) {
-                const [y, m, d] = dataStr.split('T')[0].split('-')
-                if (y && m && d) return `${d}/${m}/${y}`
-            }
-            try {
-                return new Date(dataStr).toLocaleDateString('pt-BR')
-            } catch {
-                return dataStr
-            }
         }
 
         function renderAvaliacaoItem(av) {
@@ -470,7 +474,7 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
                                     const sinal = tipo === 'negativa' ? '-' : '+'
                                     const tipoBadge = tipo === 'negativa' ? '🔴 Negativa' : '🟢 Positiva'
                                     const tipoDesc = oc.isPersonalizada ? '⭐ Ocorrência Personalizada' : 'Ocorrência Padrão'
-                                    alert(`${tipoDesc} [${tipoBadge}]: ${oc.label || oc.valor}\n${sinal}${pontosBase} PoloCoins`)
+                                    Toast.success(`${tipoDesc} [${tipoBadge}]: ${oc.label || oc.valor} (${sinal}${pontosBase} 🪙)`)
 
                                     // Atualiza os dados locais de ocorrências sem destruir o modal
                                     const novaLista = await fetch(`/avaliacoes/${alunoId}`).then(r => r.json())
@@ -484,11 +488,11 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
                                     renderizarAbaAtual()
                                     carregarAlunos()
                                 } else {
-                                    alert(data.error || "Erro ao registrar.")
+                                    Toast.error(data.error || "Erro ao registrar ocorrência.")
                                 }
                             } catch (erro) {
                                 console.error("[AVAL] Exceção:", erro)
-                                alert("Erro de conexão ao registrar ocorrência.")
+                                Toast.error("Erro de conexão ao registrar ocorrência.")
                             }
                         }
                     })
@@ -516,7 +520,10 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
                         }
                         aviso.style.display = "none"
 
-                        if (!professorId) { alert("Professor não logado."); return }
+                        if (!professorId) { 
+                            Toast.warning("Professor não autenticado.")
+                            return 
+                        }
 
                         try {
                             const res = await fetch("/avaliacoes", {
@@ -536,7 +543,7 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
                             if (res.ok) {
                                 const sinal = tipo === 'negativa' ? '-' : '+'
                                 const tipoBadge = tipo === 'negativa' ? '🔴 Negativa' : '🟢 Positiva'
-                                alert(`Ocorrência Avulsa [${tipoBadge}] registrada com sucesso!\nValor: ${sinal}${pts} PoloCoins`)
+                                Toast.success(`Ocorrência Avulsa [${tipoBadge}] registrada: ${obs} (${sinal}${pts} 🪙)`)
                                 // Atualiza os dados locais de ocorrências sem destruir o modal
                                 const novaLista = await fetch(`/avaliacoes/${alunoId}`).then(r => r.json())
                                 novaLista.forEach(av => {
@@ -549,11 +556,11 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
                                 renderizarAbaAtual()
                                 carregarAlunos()
                             } else {
-                                alert(dataRes.error || "Erro ao registrar ocorrência.")
+                                Toast.error(dataRes.error || "Erro ao registrar ocorrência.")
                             }
                         } catch (erro) {
                             console.error("[AVAL] Exceção ao registrar:", erro)
-                            alert("Erro de conexão com o servidor.")
+                            Toast.error("Erro de conexão com o servidor.")
                         }
                     })
                 }
@@ -610,7 +617,23 @@ async function abrirModalAluno(alunoId, estadoDesejado) {
     }
 }
 
-function capitalizar(s) { return String(s).charAt(0).toUpperCase() + String(s).slice(1) }
+function capitalizar(s) {
+    if (!s) return ''
+    return String(s).charAt(0).toUpperCase() + String(s).slice(1)
+}
+
+function formatarDataBR(dataStr) {
+    if (!dataStr) return ''
+    if (typeof dataStr === 'string' && dataStr.includes('-')) {
+        const [y, m, d] = dataStr.split('T')[0].split('-')
+        if (y && m && d) return `${d}/${m}/${y}`
+    }
+    try {
+        return new Date(dataStr).toLocaleDateString('pt-BR')
+    } catch {
+        return dataStr
+    }
+}
 
 function getCorByValor(cat, val) {
     for (const c of categoriasAvaliacao) {
@@ -625,9 +648,13 @@ async function mostrarTodasOcorrencias() {
 
     try {
         const resposta = await fetch(`/turmas/${turmaId}/avaliacoes`)
+        if (!resposta.ok) {
+            const err = await resposta.json().catch(() => ({}))
+            throw new Error(err.error || "Erro ao buscar avaliações da turma.")
+        }
         const avaliacoes = await resposta.json()
 
-        if (avaliacoes.length === 0) {
+        if (!Array.isArray(avaliacoes) || avaliacoes.length === 0) {
             alert("Nenhuma ocorrência registrada nesta turma.")
             return
         }
@@ -635,8 +662,9 @@ async function mostrarTodasOcorrencias() {
         // Agrupa por aluno
         const grupos = {}
         avaliacoes.forEach(av => {
-            if (!grupos[av.aluno_nome]) grupos[av.aluno_nome] = []
-            grupos[av.aluno_nome].push(av)
+            const nomeAluno = av.aluno_nome || 'Aluno'
+            if (!grupos[nomeAluno]) grupos[nomeAluno] = []
+            grupos[nomeAluno].push(av)
         })
 
         let html = `
@@ -671,11 +699,11 @@ async function mostrarTodasOcorrencias() {
                                             <span style="font-weight:700; font-size:13px; color:${isNeg ? '#dc2626' : '#16a34a'};">${pontosFormatados}</span>
                                         </div>
                                         <div style="font-size:13px; font-weight:600; color:#0f172a;">
-                                            ${capitalizar(av.categoria)}: ${av.valor}
+                                            ${capitalizar(av.categoria || '')}: ${av.valor || ''}
                                         </div>
                                         ${av.observacao ? `<small class="text-muted" style="display:block; margin-top:2px;">📝 ${av.observacao}</small>` : ""}
                                         <small class="text-muted text-xs" style="display:block; margin-top:4px;">
-                                            <i class="fas fa-chalkboard-teacher" style="margin-right:4px;"></i>${capitalizar(av.professor_nome)} &middot;
+                                            <i class="fas fa-chalkboard-teacher" style="margin-right:4px;"></i>${capitalizar(av.professor_nome || '')} &middot;
                                             <i class="far fa-calendar-alt" style="margin-right:4px;"></i>${formatarDataBR(av.data)} ${av.hora || ''}
                                         </small>
                                     </div>
@@ -703,7 +731,7 @@ async function mostrarTodasOcorrencias() {
         }
     } catch (erro) {
         console.error("Erro ao carregar todas as ocorrências:", erro)
-        alert("Erro ao carregar as ocorrências da turma.")
+        Toast.error("Erro ao carregar as ocorrências da turma.")
     }
 }
 
@@ -721,7 +749,7 @@ function Render() {
         <main class="polocoin-main">
             <div class="polocoin-main__header" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
                 <div>
-                    <h1 class="polocoin-main__title">Alunos da Turma</h1>
+                    <h1 class="polocoin-main__title">Alunos da Turma <span id="turma-alunos-count" style="font-size:16px; font-weight:normal; color:#64748b;"></span></h1>
                     <p class="polocoin-main__subtitle">Clique no aluno para ver ou registrar ocorrências</p>
                 </div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -729,9 +757,19 @@ function Render() {
                         <i class="fas fa-print"></i> Relatório da Turma
                     </button>
                     <button id="btn-ver-todas-ocorrencias" class="btn btn-secondary">
-                        <i class="fas fa-list"></i> Ver todas as ocorrências da turma
+                        <i class="fas fa-list"></i> Ver todas as ocorrências
                     </button>
                 </div>
+            </div>
+
+            <div style="margin-bottom: 16px; display: flex; gap: 10px; align-items: center; max-width: 480px;">
+                <input 
+                    id="busca-aluno-input" 
+                    type="text" 
+                    placeholder="🔍 Buscar aluno por nome..." 
+                    style="padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; font-size: 14px; background: #fff;"
+                    aria-label="Buscar aluno por nome"
+                />
             </div>
 
             <div class="polocoin-main__layout">
@@ -747,6 +785,22 @@ function Render() {
 
     carregarAlunos()
     document.getElementById("btn-ver-todas-ocorrencias").addEventListener("click", mostrarTodasOcorrencias)
+
+    const buscaInput = document.getElementById("busca-aluno-input")
+    if (buscaInput) {
+        buscaInput.addEventListener("input", debounce((e) => {
+            const termo = e.target.value.trim().toLowerCase()
+            if (!termo) {
+                renderizarGridAlunos(cacheAlunosTurma)
+                return
+            }
+            const filtrados = cacheAlunosTurma.filter(a => {
+                const nome = (a.aluno_nome || a.nome || '').toLowerCase()
+                return nome.includes(termo)
+            })
+            renderizarGridAlunos(filtrados)
+        }, 180))
+    }
 
     document.getElementById("btn-relatorio-turma")?.addEventListener("click", async () => {
         let listaAlunos = []

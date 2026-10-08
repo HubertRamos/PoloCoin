@@ -1,3 +1,5 @@
+import AlunoAvatar from '../AlunoAvatar/index.js';
+
 /**
  * CardOcorrencia - Componente para exibir uma ocorrência do aluno
  * Leitura apenas - sem ações editáveis
@@ -92,9 +94,11 @@ export default function CardOcorrencia(ocorrencia) {
         <div style="${cardStyle}">
             <div style="${style.header}">
                 <div style="${style.studentInfo}">
-                    <span style="${style.icon}">📌</span>
+                    ${AlunoAvatar({ aluno: ocorrencia, avatar: ocorrencia.aluno_avatar || ocorrencia.avatar, nome: ocorrencia.aluno_nome, tamanho: 'pequeno', formato: 'avatar-only' })}
                     <div>
-                        <div style="${style.name}">${ocorrencia.aluno_nome || 'Aluno'}</div>
+                        <div style="${style.name}">
+                            ${AlunoAvatar({ aluno: ocorrencia, avatar: ocorrencia.aluno_avatar || ocorrencia.avatar, nome: ocorrencia.aluno_nome, tamanho: 'mini', formato: 'inline' })}
+                        </div>
                         <div style="${style.meta}">
                             ${ocorrencia.serie || '?'}º${ocorrencia.turma || '?'} · ${ocorrencia.categoria || 'Geral'}
                         </div>

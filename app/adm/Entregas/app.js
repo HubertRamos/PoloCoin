@@ -1,6 +1,8 @@
 import Header from '../../../components/Header/index.js'
 import AlunoAvatar from '../../../components/AlunoAvatar/index.js'
 import { linksHeader } from '../constLinks.js'
+import Modal from '../../../components/Modal/index.js'
+import Toast from '../../../components/Toast/index.js'
 
 const root = document.getElementById('root')
 
@@ -55,71 +57,63 @@ async function carregarFiltros() {
 }
 
 function abrirModalFiltro(tipo) {
-    root.innerHTML = `
-        ${Header(linksHeader)}
-        <main class="polocoin-main" style="max-width: 420px;">
-            <div style="margin-bottom: 20px; text-align: center;">
-                <button id="btn-voltar" class="btn btn-ghost">
-                    <i class="fa-solid fa-xmark"></i> Fechar
-                </button>
-            </div>
-            <h2 style="font-size: 16px; color: #0f172a; margin-bottom: 16px;">Filtrar por ${tipo === 'produto' ? 'Produto' : tipo === 'categoria' ? 'Categoria' : 'Turma'}</h2>
-            <div id="opcoes-filtro"></div>
-        </main>
-    `
-
-    const btnVoltar = document.getElementById('btn-voltar')
-    if (btnVoltar) btnVoltar.addEventListener('click', () => Render())
-
-    const container = document.getElementById('opcoes-filtro')
-    if (!container) return
+    let opcoesHtml = ''
 
     if (tipo === 'produto') {
-        container.innerHTML = produtosFiltro.length === 0
-            ? '<p style="color:#94a3b8; font-size:13px;">Nenhum produto com entrega pendente.</p>'
+        opcoesHtml = produtosFiltro.length === 0
+            ? '<p style="color:#94a3b8; font-size:13px; text-align:center; padding:16px;">Nenhum produto com entrega pendente.</p>'
             : produtosFiltro.map(p => `
-                <label style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:6px; cursor:pointer;">
-                    <input type="radio" name="filtro" value="produto" style="accent-color:#3b82f6;" onchange="window.aplicarFiltro('produto', '${p.produto_nome.replace(/'/g, "\\'")}')">
+                <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px; cursor:pointer; background:#fff;">
+                    <input type="radio" name="filtro" value="produto" style="accent-color:#3b82f6; width:16px; height:16px;" onchange="window.aplicarFiltro('produto', '${p.produto_nome.replace(/'/g, "\\'")}')">
                     <div>
-                        <strong style="font-size:13px; color:#0f172a;">${p.produto_nome}</strong>
-                        <small style="color:#94a3b8; font-size:11px;">🪙 ${p.custo_pontos} pts</small>
+                        <strong style="font-size:14px; color:#0f172a; display:block;">${p.produto_nome}</strong>
+                        <small style="color:#64748b; font-size:12px;">🪙 ${p.custo_pontos} PoloCoins</small>
                     </div>
                 </label>
             `).join('')
     }
 
     if (tipo === 'categoria') {
-        container.innerHTML = categoriasFiltro.length === 0
-            ? '<p style="color:#94a3b8; font-size:13px;">Nenhuma categoria com entrega pendente.</p>'
+        opcoesHtml = categoriasFiltro.length === 0
+            ? '<p style="color:#94a3b8; font-size:13px; text-align:center; padding:16px;">Nenhuma categoria com entrega pendente.</p>'
             : categoriasFiltro.map(c => `
-                <label style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:6px; cursor:pointer;">
-                    <input type="radio" name="filtro" value="categoria" style="accent-color:#3b82f6;" onchange="window.aplicarFiltro('categoria', '${c.categoria_nome.replace(/'/g, "\\'")}')">
-                    <strong style="font-size:13px; color:#0f172a;">${c.categoria_nome}</strong>
+                <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px; cursor:pointer; background:#fff;">
+                    <input type="radio" name="filtro" value="categoria" style="accent-color:#3b82f6; width:16px; height:16px;" onchange="window.aplicarFiltro('categoria', '${c.categoria_nome.replace(/'/g, "\\'")}')">
+                    <strong style="font-size:14px; color:#0f172a;">${c.categoria_nome}</strong>
                 </label>
             `).join('')
     }
 
     if (tipo === 'turma') {
-        container.innerHTML = turmasFiltro.length === 0
-            ? '<p style="color:#94a3b8; font-size:13px;">Nenhuma turma com entrega pendente.</p>'
+        opcoesHtml = turmasFiltro.length === 0
+            ? '<p style="color:#94a3b8; font-size:13px; text-align:center; padding:16px;">Nenhuma turma com entrega pendente.</p>'
             : turmasFiltro.map(t => `
-                <label style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:6px; cursor:pointer;">
-                    <input type="radio" name="filtro" value="turma" style="accent-color:#3b82f6;" onchange="window.aplicarFiltro('turma', ${t.id})">
-                    <strong style="font-size:13px; color:#0f172a;">${t.turma_nome}</strong>
+                <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px; cursor:pointer; background:#fff;">
+                    <input type="radio" name="filtro" value="turma" style="accent-color:#3b82f6; width:16px; height:16px;" onchange="window.aplicarFiltro('turma', ${t.id})">
+                    <strong style="font-size:14px; color:#0f172a;">${t.turma_nome}</strong>
                 </label>
             `).join('')
     }
 
-    // Adicionar 선택지를 modal에 추가
-    container.innerHTML += `
-        <label style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid #e2e8f0; border-radius:6px; margin-top:12px; cursor:pointer; background:#f8fafc;">
-            <input type="radio" name="filtro" value="limpar" onchange="window.aplicarFiltro('limpar')">
+    opcoesHtml += `
+        <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px dashed #cbd5e1; border-radius:8px; margin-top:12px; cursor:pointer; background:#f8fafc;">
+            <input type="radio" name="filtro" value="limpar" style="accent-color:#3b82f6; width:16px; height:16px;" onchange="window.aplicarFiltro('limpar')">
             <strong style="font-size:13px; color:#64748b;">✕ Sem filtro (mostrar todos)</strong>
         </label>
     `
+
+    Modal.open({
+        id: 'modal-filtro-entregas',
+        title: `Filtrar por ${tipo === 'produto' ? 'Produto' : tipo === 'categoria' ? 'Categoria' : 'Turma'}`,
+        subtitle: 'Selecione uma opção para refinar as entregas pendentes',
+        content: `<div style="max-height: 60vh; overflow-y: auto;">${opcoesHtml}</div>`,
+        maxWidth: '440px'
+    })
 }
 
 window.aplicarFiltro = async (tipo, valor) => {
+    Modal.close('modal-filtro-entregas')
+
     if (tipo === 'produto') {
         filtroProduto = valor
         filtroCategoria = null
@@ -144,6 +138,7 @@ window.aplicarFiltro = async (tipo, valor) => {
     }
     await carregarCompras()
     Render()
+    Toast.info('Filtro aplicado.')
 }
 
 async function confirmarEntrega(compraId) {
@@ -151,15 +146,15 @@ async function confirmarEntrega(compraId) {
         const res = await fetch(`/admin/compras/${compraId}/entregar`, { method: 'PATCH' })
         const data = await res.json()
         if (!res.ok) {
-            alert(data.error || 'Erro ao confirmar entrega.')
+            Toast.error(data.error || 'Erro ao confirmar entrega.')
             return
         }
-        alert('✓ Entrega confirmada!')
+        Toast.success('✓ Entrega concluída com sucesso!')
         await carregarCompras()
         await carregarFiltros()
-        setTimeout(() => Render(), 300)
+        Render()
     } catch (e) {
-        alert('Erro de conexão. Tente novamente.')
+        Toast.error('Erro de conexão ao confirmar entrega.')
     }
 }
 
@@ -167,7 +162,7 @@ async function confirmarEntrega(compraId) {
 function imprimirPendentes() {
 
     if (compras.length === 0) {
-        alert('Não existem entregas pendentes para imprimir.')
+        Toast.warning('Não existem entregas pendentes para imprimir.')
         return
     }
 

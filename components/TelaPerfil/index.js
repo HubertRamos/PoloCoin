@@ -5,6 +5,8 @@
  * Atualiza em tempo real sem recarregar a página.
  */
 
+import Toast from '../Toast/index.js';
+
 const CATEGORIAS_PADRAO = [
     {
         id: 'rostos',
@@ -520,9 +522,10 @@ export function abrirModalSeletorAvatar({ alunoId, avatarAtual = '🙂', onAvata
 
             if (resp.ok) {
                 fechar();
+                Toast.success('✓ Avatar atualizado com sucesso!');
                 onAvatarSalvo(resultado.avatar || avatarSelecionado);
             } else {
-                alert(resultado.error || 'Erro ao salvar avatar.');
+                Toast.error(resultado.error || 'Erro ao salvar avatar.');
                 salvando = false;
                 renderConteudo();
             }
@@ -530,6 +533,7 @@ export function abrirModalSeletorAvatar({ alunoId, avatarAtual = '🙂', onAvata
             console.error('Erro de conexão ao salvar avatar:', err);
             // Em caso de falha de conexão, aplica localmente para não bloquear o aluno
             fechar();
+            Toast.info('Avatar atualizado temporariamente.');
             onAvatarSalvo(avatarSelecionado);
         }
     }

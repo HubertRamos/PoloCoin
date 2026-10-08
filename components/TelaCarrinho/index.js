@@ -1,3 +1,5 @@
+import Toast from '../Toast/index.js';
+
 const CARRINHO_KEY = 'poloCarrinho';
 
 function lerCarrinho() {
@@ -350,9 +352,15 @@ export default async function TelaCarrinho(root, alunoId) {
                 }
 
                 if (fecharModal) fecharModal();
+                if (data.status === 'desejos' || data.tipo === 'desejos') {
+                    Toast.warning('Pedido enviado para a Lista de Desejos!');
+                } else {
+                    Toast.success('Compra realizada com sucesso!');
+                }
                 renderTela(data);
             } else {
                 if (fecharModal) fecharModal();
+                Toast.error(data.error || 'Não foi possível concluir o pedido.');
                 const fb = document.getElementById('carrinho-feedback');
                 if (fb) {
                     fb.className = 'alert alert-danger';
@@ -363,6 +371,7 @@ export default async function TelaCarrinho(root, alunoId) {
             }
         } catch {
             if (fecharModal) fecharModal();
+            Toast.error('Erro de conexão ao finalizar. Tente novamente.');
             const fb = document.getElementById('carrinho-feedback');
             if (fb) {
                 fb.className = 'alert alert-danger';

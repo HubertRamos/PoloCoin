@@ -12,6 +12,9 @@ export async function puxarAlunosDoResponsavel(responsavelId) {
             id,
             nome,
             password,
+            avatar,
+            pontos,
+            pode_comprar,
             turmas (
                 serie,
                 turma
@@ -30,6 +33,8 @@ export async function puxarAlunosDoResponsavel(responsavelId) {
             id: a.id,
             aluno_nome: a.nome,
             avatar: resolverAvatarAluno(a.id, a.avatar),
+            pontos: a.pontos ?? 0,
+            pode_comprar: a.pode_comprar ?? false,
             aluno_senha: a.password,
             serie: t?.serie ?? null,
             turma: t?.turma ?? null

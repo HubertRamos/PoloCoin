@@ -1,4 +1,5 @@
 import AlunoAvatar from '../AlunoAvatar/index.js';
+import { SkeletonCardOcorrencia } from '../Skeleton/index.js';
 
 export default async function TelaOcorrencias(root, alunoId) {
     root.innerHTML = `
@@ -8,9 +9,8 @@ export default async function TelaOcorrencias(root, alunoId) {
                 <p class="resp-header__subtitle">Visualização das ocorrências registradas</p>
             </div>
 
-            <div id="obs-loading" class="loading-state">
-                <div class="loading-state__icon">⏳</div>
-                <p>Carregando ocorrências...</p>
+            <div id="obs-loading" style="margin-top: 16px;">
+                ${SkeletonCardOcorrencia(3)}
             </div>
 
             <div id="obs-content" style="display: none;"></div>

@@ -1,20 +1,11 @@
 import AlunoAvatar from '../AlunoAvatar/index.js';
+import Toast from '../Toast/index.js';
+import { SkeletonCardAluno } from '../Skeleton/index.js';
 
 /**
  * Renderiza o dashboard do responsável (filhos + desejos)
  * Permite aprovação de pedidos da Lista de Desejos e controle de permissões de compra.
  */
-
-function exibirFeedbackResponsavel(tipo, html) {
-    const el = document.getElementById('resp-feedback');
-    if (!el) return;
-    el.className = `alert alert-${tipo}`;
-    el.style.display = 'block';
-    el.innerHTML = html;
-    setTimeout(() => {
-        if (el) el.style.display = 'none';
-    }, 7000);
-}
 
 export async function renderDashboard(root) {
     const user = JSON.parse(sessionStorage.getItem('poloUser') || '{}');
@@ -49,21 +40,13 @@ export async function renderDashboard(root) {
                 }
 
                 // Exibe feedback visual de sucesso
-                exibirFeedbackResponsavel(
-                    'success',
-                    `✅ <strong>Pedido Aprovado com Sucesso!</strong><br>` +
-                    `O produto <strong>"${resultado.produto?.nome || 'Item'}"</strong> foi autorizado e movido para <strong>Pendentes de Entrega</strong>.<br>` +
-                    `🪙 Saldo restante do aluno: <strong>🪙 ${resultado.saldo_restante}</strong>`
-                );
+                Toast.success(`Pedido de "${resultado.produto?.nome || 'Item'}" aprovado com sucesso! Movido para entregas.`);
             } else {
                 if (btnElement) {
                     btnElement.disabled = false;
                     btnElement.innerHTML = '✅ Autorizar';
                 }
-                exibirFeedbackResponsavel(
-                    'danger',
-                    `❌ <strong>Não foi possível autorizar:</strong> ${resultado.error || 'Erro ao processar autorização.'}`
-                );
+                Toast.error(resultado.error || 'Erro ao processar autorização.');
             }
         } catch (erro) {
             console.error('Erro ao autorizar compra:', erro);
@@ -71,10 +54,7 @@ export async function renderDashboard(root) {
                 btnElement.disabled = false;
                 btnElement.innerHTML = '✅ Autorizar';
             }
-            exibirFeedbackResponsavel(
-                'danger',
-                '❌ <strong>Erro de conexão:</strong> Não foi possível comunicar com o servidor.'
-            );
+            Toast.error('Não foi possível comunicar com o servidor.');
         }
     };
 
@@ -92,13 +72,13 @@ export async function renderDashboard(root) {
             if (resposta.ok) {
                 const conteudo = document.getElementById('conteudo-principal') || root;
                 if (conteudo) await renderDashboard(conteudo);
-                exibirFeedbackResponsavel('success', '🔓 Permissão de compras <strong>liberada</strong> com sucesso para o aluno!');
+                Toast.success('Permissão de compras liberada com sucesso!');
             } else {
                 if (btnElement) {
                     btnElement.disabled = false;
                     btnElement.innerHTML = '🔓 Liberar';
                 }
-                exibirFeedbackResponsavel('danger', 'Erro ao liberar compras.');
+                Toast.error('Erro ao liberar compras.');
             }
         } catch (e) {
             console.error('Erro ao liberar compras:', e);
@@ -106,7 +86,7 @@ export async function renderDashboard(root) {
                 btnElement.disabled = false;
                 btnElement.innerHTML = '🔓 Liberar';
             }
-            exibirFeedbackResponsavel('danger', 'Erro de conexão.');
+            Toast.error('Erro de conexão ao liberar compras.');
         }
     };
 
@@ -124,13 +104,13 @@ export async function renderDashboard(root) {
             if (resposta.ok) {
                 const conteudo = document.getElementById('conteudo-principal') || root;
                 if (conteudo) await renderDashboard(conteudo);
-                exibirFeedbackResponsavel('warning', '🔒 Compras <strong>bloqueadas</strong> com sucesso para o aluno.');
+                Toast.warning('Compras bloqueadas para o aluno.');
             } else {
                 if (btnElement) {
                     btnElement.disabled = false;
                     btnElement.innerHTML = '🔒 Bloquear';
                 }
-                exibirFeedbackResponsavel('danger', 'Erro ao bloquear compras.');
+                Toast.error('Erro ao bloquear compras.');
             }
         } catch (e) {
             console.error('Erro ao bloquear compras:', e);
@@ -138,7 +118,7 @@ export async function renderDashboard(root) {
                 btnElement.disabled = false;
                 btnElement.innerHTML = '🔒 Bloquear';
             }
-            exibirFeedbackResponsavel('danger', 'Erro de conexão.');
+            Toast.error('Erro de conexão ao bloquear compras.');
         }
     };
 

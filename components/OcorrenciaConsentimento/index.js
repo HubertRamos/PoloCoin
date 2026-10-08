@@ -452,7 +452,7 @@ export default function OcorrenciaConsentimento({ ocorrencias, indiceAtual = 0, 
                         style="${style.checkbox}"
                     >
                     <span style="${style.labelText}">
-                        ✓ Li e concordo em receber esta informação
+                        ✓ Li e me responsabilizo, estando ciente desta informação.
                     </span>
                 </label>
 

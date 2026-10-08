@@ -1,4 +1,7 @@
 import Header from '../Header/index.js';
+import Toast from '../Toast/index.js';
+import { SkeletonCardProduto } from '../Skeleton/index.js';
+import { debounce } from '../../utils/helpers.js';
 
 const CARRINHO_KEY = 'poloCarrinho';
 
@@ -63,10 +66,9 @@ export default async function TelaLoja(root, alunoId) {
                 </button>
             </div>
 
-            <!-- Loading -->
-            <div id="loja-loading" class="loading-state">
-                <div class="loading-state__icon">🛒</div>
-                <p>Carregando produtos...</p>
+            <!-- Loading Skeleton -->
+            <div id="loja-loading" class="produtos-grid" style="margin-bottom: 20px;">
+                ${SkeletonCardProduto(6)}
             </div>
 
             <!-- Lista de produtos -->
@@ -138,15 +140,17 @@ export default async function TelaLoja(root, alunoId) {
     // Atualiza badge do carrinho após carregar
     atualizarBadgeCarrinho();
 
-    window.filtrarLoja = async () => {
-        const busca = document.getElementById('loja-busca').value;
-        const cat = document.getElementById('loja-filtro-categoria').value;
+    window.filtrarLoja = debounce(async () => {
+        const busca = document.getElementById('loja-busca')?.value || '';
+        const cat = document.getElementById('loja-filtro-categoria')?.value || '';
         await carregarProdutos(cat, busca);
-    };
+    }, 200);
 
     window.limparFiltrosLoja = async () => {
-        document.getElementById('loja-busca').value = '';
-        document.getElementById('loja-filtro-categoria').value = '';
+        const buscaEl = document.getElementById('loja-busca');
+        const catEl = document.getElementById('loja-filtro-categoria');
+        if (buscaEl) buscaEl.value = '';
+        if (catEl) catEl.value = '';
         await carregarProdutos('', '');
     };
 
@@ -161,7 +165,7 @@ export default async function TelaLoja(root, alunoId) {
         }
         salvarCarrinho(carrinho);
         atualizarBadgeCarrinho();
-        exibirFeedback('success', `✅ <strong>${p.nome || 'Produto'}</strong> adicionado ao carrinho!`);
+        Toast.success(`"${p.nome || 'Produto'}" adicionado ao carrinho!`);
     };
 
     window.removerDoCarrinho = (id) => {
@@ -177,6 +181,7 @@ export default async function TelaLoja(root, alunoId) {
         }
         salvarCarrinho(carrinho);
         atualizarBadgeCarrinho();
+        Toast.info('Item atualizado no carrinho.');
         window.navegarPara('carrinho');
     };
 
@@ -191,14 +196,14 @@ export default async function TelaLoja(root, alunoId) {
         .then(r => r.json())
         .then(d => {
             if (d.error) {
-                exibirFeedback('danger', `❌ ${d.error}`);
+                Toast.error(d.error);
                 if (btn) btn.disabled = false;
             } else {
-                exibirFeedback('warning', '✅ Produto adicionado aos desejos! Aguarde autorização do responsável.');
+                Toast.warning('Produto enviado para a Lista de Desejos! Aguarde aprovação do responsável.');
             }
         })
         .catch(() => {
-            exibirFeedback('danger', '❌ Erro de conexão.');
+            Toast.error('Erro de conexão ao salvar desejo.');
             if (btn) btn.disabled = false;
         });
     };
