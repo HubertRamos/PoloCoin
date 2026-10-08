@@ -1,6 +1,7 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { supabase } from './config/supabase.js';
+import { supabase, isSupabaseConfigured, supabaseProjectRef } from './config/supabase.js';
 import { criarProfessor, puxarProfessores, buscarProfessorPorId as buscarProfessorGeral, atualizarProfessor } from './services/professoresServices.js';
 import { criarTurma, puxarTurmas } from './services/turmasServices.js';
 import { criarAlunoComResponsavel, puxarAlunosPorTurma, puxarAvaliacoesDoAluno, atualizarSenhaAluno, buscarAlunoPorId, atualizarAluno } from './services/alunosServices.js';
@@ -1085,6 +1086,55 @@ app.post('/admin/retencao-dados/executar', async (req, res) => {
     } catch (error) {
         console.error('ERRO AO EXECUTAR LIMPEZA DE DADOS:', error);
         return res.status(500).json({ error: 'Erro ao executar limpeza de dados.' });
+    }
+});
+
+// Rota de diagnóstico para testar o banco de dados e as chaves
+app.get('/status-banco', async (req, res) => {
+    try {
+        if (!isSupabaseConfigured) {
+            return res.status(200).json({
+                conectado: false,
+                status: 'pendente_configuracao',
+                mensagem: 'Chave do Supabase ainda não configurada no arquivo .env.',
+                projeto: supabaseProjectRef,
+                instrucoes: 'Abra o arquivo .env e adicione sua SUPABASE_URL e SUPABASE_ANON_KEY.'
+            });
+        }
+
+        const { data, error } = await supabase.from('admins').select('name').limit(1);
+
+        if (error) {
+            let detalhe = error.message;
+            let orientacao = 'Verifique a chave e a URL no arquivo .env.';
+            if (error.message.includes('Invalid API key') || error.message.includes('JWT')) {
+                orientacao = 'A chave informada no .env é inválida. Copie a chave "anon" (public) no painel do Supabase em Project Settings > API.';
+            } else if (error.message.includes('relation') || error.message.includes('does not exist')) {
+                orientacao = 'A conexão com o Supabase funcionou, mas as tabelas ainda não foram criadas! Execute o arquivo "restaurar_db.sql" no SQL Editor do Supabase.';
+            }
+
+            return res.status(200).json({
+                conectado: false,
+                status: 'erro_conexao',
+                erro: detalhe,
+                projetoDetectado: supabaseProjectRef,
+                orientacao
+            });
+        }
+
+        return res.status(200).json({
+            conectado: true,
+            status: 'online',
+            mensagem: 'Banco de dados Supabase conectado e tabelas acessíveis!',
+            projetoDetectado: supabaseProjectRef,
+            tabelasProntas: true
+        });
+    } catch (err) {
+        return res.status(500).json({
+            conectado: false,
+            status: 'erro_interno',
+            erro: err.message
+        });
     }
 });
 

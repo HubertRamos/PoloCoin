@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase.js';
+import { supabase, isSupabaseConfigured } from '../config/supabase.js';
 import { DATA_RETENTION } from '../config/dataRetention.js';
 
 let timerAgendador = null;
@@ -38,8 +38,13 @@ export async function limparEntregasAntigas(anos = DATA_RETENTION.productDeliver
         .select('id');
 
     if (error) {
-        console.error('[RETENÇÃO] Erro ao remover entregas antigas:', error.message);
-        throw new Error(`Erro ao limpar entregas antigas: ${error.message}`);
+        if (error.message.includes('Invalid API key') || error.message.includes('JWT')) {
+            throw new Error('Chave de API do Supabase inválida no arquivo .env');
+        }
+        if (error.message.includes('relation') || error.message.includes('does not exist')) {
+            throw new Error('Tabela "compras" ainda não criada no banco (execute restaurar_db.sql no Supabase)');
+        }
+        throw new Error(`Erro ao limpar entregas: ${error.message}`);
     }
 
     const removidos = data ? data.length : 0;
@@ -64,8 +69,13 @@ export async function limparOcorrenciasAntigas(anos = DATA_RETENTION.occurrences
         .select('id');
 
     if (error) {
-        console.error('[RETENÇÃO] Erro ao remover ocorrências antigas:', error.message);
-        throw new Error(`Erro ao limpar ocorrências antigas: ${error.message}`);
+        if (error.message.includes('Invalid API key') || error.message.includes('JWT')) {
+            throw new Error('Chave de API do Supabase inválida no arquivo .env');
+        }
+        if (error.message.includes('relation') || error.message.includes('does not exist')) {
+            throw new Error('Tabela "avaliacoes" ainda não criada no banco (execute restaurar_db.sql no Supabase)');
+        }
+        throw new Error(`Erro ao limpar ocorrências: ${error.message}`);
     }
 
     const removidos = data ? data.length : 0;
@@ -78,6 +88,10 @@ export async function limparOcorrenciasAntigas(anos = DATA_RETENTION.occurrences
  * @returns {Promise<typeof ultimoStatusExecucao>}
  */
 export async function executarLimpezaGeral() {
+    if (!isSupabaseConfigured) {
+        console.warn('[RETENÇÃO] ⚠️ Rotina pausada: informe SUPABASE_URL e SUPABASE_ANON_KEY válidas no arquivo .env.');
+        return ultimoStatusExecucao;
+    }
     const inicio = new Date();
     console.log(`[RETENÇÃO] Iniciando rotina automática de limpeza de dados em ${inicio.toISOString()}...`);
 
@@ -107,7 +121,7 @@ export async function executarLimpezaGeral() {
             sucesso: false,
             mensagem: err.message
         };
-        console.error('[RETENÇÃO] Falha na rotina de retenção:', err);
+        console.warn(`[RETENÇÃO] ⚠️ ${err.message}`);
         return ultimoStatusExecucao;
     }
 }
